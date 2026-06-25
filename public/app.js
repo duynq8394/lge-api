@@ -1,5 +1,5 @@
 // ==========================================
-// PHẦN 1: TỰ ĐỘNG GIẢI MÁ TOKEN (JWT DECODER)
+// PHẦN 1: TỰ ĐỘNG GIẢI MÃ TOKEN (JWT DECODER)
 // ==========================================
 document.getElementById('token').addEventListener('input', function() {
     let token = this.value.trim();
@@ -8,21 +8,21 @@ document.getElementById('token').addEventListener('input', function() {
     if (token.toLowerCase().startsWith('bearer ')) {
         token = token.substring(7).trim();
     }
-
+    
     if (!token) {
         displayDiv.style.display = 'none';
         return;
     }
-
+    
     try {
         const parts = token.split('.');
         if (parts.length !== 3) throw new Error("Không phải định dạng JWT");
-
+        
         const payloadBase64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
         const jsonPayload = decodeURIComponent(window.atob(payloadBase64).split('').map(function(c) {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         }).join(''));
-
+        
         const payloadObj = JSON.parse(jsonPayload);
         const userInfo = JSON.parse(payloadObj.nameid);
         
@@ -32,7 +32,7 @@ document.getElementById('token').addEventListener('input', function() {
             hour: '2-digit', minute:'2-digit', second:'2-digit', 
             day: '2-digit', month: '2-digit', year: 'numeric' 
         });
-
+        
         displayDiv.style.display = 'block';
         displayDiv.className = 'info-box';
         displayDiv.innerHTML = `
@@ -75,6 +75,13 @@ function getRealTime() {
     return { date: parseInt(`${yyyy}${mm}${dd}`), time: `${yyyy}${mm}${dd}${HH}${MM}${ss}` };
 }
 
+// Hàm tạo nhiễu GPS tự nhiên (xê dịch khoảng 1-3 mét)
+function addGpsJitter(coordinate) {
+    // Tạo một số ngẫu nhiên từ -0.00002 đến +0.00002
+    const jitter = (Math.random() - 0.5) * 0.00004;
+    return coordinate + jitter;
+}
+
 // Hàm thực thi upload chính
 async function executeUpload() {
     const token = document.getElementById('token').value.trim();
@@ -82,43 +89,60 @@ async function executeUpload() {
     
     if (!token) { printLog("LỖI: Thiếu Token xác thực!", true); return; }
     if (fileInput.files.length === 0) { printLog("LỖI: Chưa chọn ảnh!", true); return; }
-
+    
     const btn = document.getElementById('btnSubmit');
     btn.disabled = true; 
     btn.innerText = "⏳ ĐANG XỬ LÝ VÀ TRUYỀN TẢI...";
-    printLog("Đang mã hóa ảnh và chuẩn bị Payload...");
-
+    printLog("Đang mã hóa ảnh và chuẩn bị Payload ẩn danh...");
+    
     const file = fileInput.files[0];
     const reader = new FileReader();
-
+    
     reader.onload = async function(e) {
         try {
             const base64Data = e.target.result.split(',')[1];
-            const lat = parseFloat(document.getElementById('lat').value);
-            const lng = parseFloat(document.getElementById('lng').value);
+            
+            // 1. Lấy tọa độ gốc và chèn Nhiễu tự nhiên (Jitter)
+            const baseLat = parseFloat(document.getElementById('lat').value);
+            const baseLng = parseFloat(document.getElementById('lng').value);
+            const finalLat = addGpsJitter(baseLat);
+            const finalLng = addGpsJitter(baseLng);
+            
+            // 2. Random Accuracy (Độ chính xác GPS bắt sóng)
+            const randAccuracy = 20 + Math.random() * 3; 
+            
+            // 3. Fake tên ảnh chuẩn của hệ điều hành iOS
+            const fakePhotoName = crypto.randomUUID().toUpperCase() + ".jpg";
             const realTime = getRealTime();
             
-            // Random Accuracy giả lập GPS bắt sóng tự nhiên
-            const randAccuracy = 20 + Math.random() * 2; 
-
             const payload = {
                 "ShopId": parseInt(document.getElementById('shopId').value),
                 "ShopCode": document.getElementById('shopCode').value,
-                "PhotoName": file.name,
-                "Latitude": lat, "Longitude": lng, "Accuracy": randAccuracy,
-                "ReportId": 1, "PhotoTime": realTime.time, "PhotoType": "1",
+                "PhotoName": fakePhotoName, // Đã fix: Tránh lộ tên file Screenshot
+                "Latitude": finalLat,       // Đã fix: Dao động vị trí tự nhiên
+                "Longitude": finalLng,      // Đã fix: Dao động vị trí tự nhiên
+                "Accuracy": randAccuracy,
+                "ReportId": 1, 
+                "PhotoTime": realTime.time, 
+                "PhotoType": "1",
                 "PhotoDate": realTime.date, 
                 "guid": crypto.randomUUID(), 
-                "PhotoData": base64Data, "WorkStatus": 1,
+                "PhotoData": base64Data, 
+                "WorkStatus": 1,
                 "DataLocation": JSON.stringify({
-                    "latitude": lat, "longitude": lng, "accuracy": randAccuracy,
-                    "isFast": false, "usedHighAccuracy": true, "isLikelyPreciseFix": true
+                    "latitude": finalLat, 
+                    "longitude": finalLng, 
+                    "accuracy": randAccuracy,
+                    "isFast": false, 
+                    "usedHighAccuracy": true, 
+                    "isLikelyPreciseFix": true
                 })
             };
-
-            printLog("Gửi yêu cầu tới Proxy Server để chèn Headers ẩn danh...");
-
-            // Gọi qua Proxy server.js
+            
+            printLog(`Tọa độ đã làm nhiễu: Lat ${finalLat.toFixed(6)}, Lng ${finalLng.toFixed(6)}`);
+            printLog(`Tên ảnh giả mạo: ${fakePhotoName}`);
+            printLog("Gửi yêu cầu tới Proxy Server...");
+            
             const response = await fetch('/proxy-upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -127,7 +151,6 @@ async function executeUpload() {
                     payload: payload
                 })
             });
-
             const result = await response.json();
             
             if (response.ok && result.success) {

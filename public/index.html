@@ -3,22 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Upload Ẩn Danh</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #333; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
-        h2 { text-align: center; color: #1a73e8; margin-top: 0; }
-        .form-row { display: flex; gap: 15px; margin-bottom: 15px; }
-        .form-group { flex: 1; }
-        label { font-weight: 600; font-size: 14px; margin-bottom: 8px; display: block; color: #555; }
-        input, textarea { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ced4da; border-radius: 6px; font-family: monospace; }
-        input:focus, textarea:focus { border-color: #1a73e8; outline: none; }
-        button { width: 100%; padding: 15px; background: #1a73e8; color: white; border: none; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #1557b0; }
-        button:disabled { background: #a0c3ff; cursor: not-allowed; }
-        .log-terminal { background: #1e1e1e; color: #4af626; padding: 15px; margin-top: 20px; border-radius: 8px; font-family: 'Courier New', Courier, monospace; height: 200px; overflow-y: auto; white-space: pre-wrap; font-size: 13px; }
-        .warning-box { background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; border-left: 5px solid #ffeeba; margin-bottom: 20px; font-size: 14px; }
-    </style>
+    <title>Hệ Thống Upload Ẩn Danh PRO</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
@@ -29,17 +15,31 @@
         
         <div class="form-group" style="margin-bottom: 15px;">
             <label>Authorization Token (Bearer):</label>
-            <textarea id="token" rows="2" placeholder="eyJhbGciOiJIUzUxMiIsInR..."></textarea>
+            <textarea id="token" rows="2" placeholder="Dán mã Token (eyJhb...) vào đây..."></textarea>
+            
+            <div id="userInfoDisplay" class="info-box" style="display: none;"></div>
         </div>
         
         <div class="form-row">
-            <div class="form-group"><label>ShopId:</label><input type="number" id="shopId" value="359285"></div>
-            <div class="form-group"><label>ShopCode:</label><input type="text" id="shopCode" value="EASV11016"></div>
+            <div class="form-group">
+                <label>ShopId:</label>
+                <input type="number" id="shopId" value="359285">
+            </div>
+            <div class="form-group">
+                <label>ShopCode:</label>
+                <input type="text" id="shopCode" value="EASV11016">
+            </div>
         </div>
 
         <div class="form-row">
-            <div class="form-group"><label>Vĩ độ (Latitude):</label><input type="text" id="lat" value="21.17003169232964"></div>
-            <div class="form-group"><label>Kinh độ (Longitude):</label><input type="text" id="lng" value="106.05863329637819"></div>
+            <div class="form-group">
+                <label>Vĩ độ (Latitude):</label>
+                <input type="text" id="lat" value="21.17003169232964">
+            </div>
+            <div class="form-group">
+                <label>Kinh độ (Longitude):</label>
+                <input type="text" id="lng" value="106.05863329637819">
+            </div>
         </div>
 
         <div class="form-group" style="margin-bottom: 20px;">
@@ -47,94 +47,11 @@
             <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg">
         </div>
 
-        <button onclick="executeUpload()" id="btnSubmit">🚀 THỰC THI GỬI LÊN MÁY CHỦ</button>
+        <button id="btnSubmit">🚀 THỰC THI GỬI LÊN MÁY CHỦ</button>
         
         <div class="log-terminal" id="logBox">[SYSTEM] Khởi tạo thành công. Máy chủ proxy đang chờ lệnh...</div>
     </div>
 
-    <script>
-        function printLog(msg, isError = false) {
-            const logBox = document.getElementById('logBox');
-            const time = new Date().toLocaleTimeString();
-            const color = isError ? 'color: #ff5555;' : '';
-            logBox.innerHTML += `\n<span style="${color}">[${time}] ${msg}</span>`;
-            logBox.scrollTop = logBox.scrollHeight;
-        }
-
-        function getRealTime() {
-            const now = new Date();
-            const pad = n => n.toString().padStart(2, '0');
-            const yyyy = now.getFullYear(), mm = pad(now.getMonth() + 1), dd = pad(now.getDate());
-            const HH = pad(now.getHours()), MM = pad(now.getMinutes()), ss = pad(now.getSeconds());
-            return { date: parseInt(`${yyyy}${mm}${dd}`), time: `${yyyy}${mm}${dd}${HH}${MM}${ss}` };
-        }
-
-        function executeUpload() {
-            const token = document.getElementById('token').value.trim();
-            const fileInput = document.getElementById('imageInput');
-            
-            if (!token) { printLog("LỖI: Thiếu Token xác thực!", true); return; }
-            if (fileInput.files.length === 0) { printLog("LỖI: Chưa chọn ảnh!", true); return; }
-
-            const btn = document.getElementById('btnSubmit');
-            btn.disabled = true; btn.innerText = "⏳ ĐANG XỬ LÝ VÀ TRUYỀN TẢI...";
-            printLog("Đang mã hóa ảnh và chuẩn bị Payload...");
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = async function(e) {
-                try {
-                    const base64Data = e.target.result.split(',')[1];
-                    const lat = parseFloat(document.getElementById('lat').value);
-                    const lng = parseFloat(document.getElementById('lng').value);
-                    const realTime = getRealTime();
-                    
-                    // Tạo accuracy dao động tự nhiên quanh mức 21
-                    const randAccuracy = 20 + Math.random() * 2; 
-
-                    const payload = {
-                        "ShopId": parseInt(document.getElementById('shopId').value),
-                        "ShopCode": document.getElementById('shopCode').value,
-                        "PhotoName": file.name,
-                        "Latitude": lat, "Longitude": lng, "Accuracy": randAccuracy,
-                        "ReportId": 1, "PhotoTime": realTime.time, "PhotoType": "1",
-                        "PhotoDate": realTime.date, 
-                        "guid": crypto.randomUUID(), // Tạo GUID độc nhất
-                        "PhotoData": base64Data, "WorkStatus": 1,
-                        "DataLocation": JSON.stringify({
-                            "latitude": lat, "longitude": lng, "accuracy": randAccuracy,
-                            "isFast": false, "usedHighAccuracy": true, "isLikelyPreciseFix": true
-                        })
-                    };
-
-                    printLog("Gửi yêu cầu tới Proxy Server để chèn Headers ẩn danh...");
-
-                    // Gọi API nội bộ của chính Node.js Server
-                    const response = await fetch('/proxy-upload', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            token: token.replace('Bearer ', ''), // Lọc chữ Bearer nếu dán thừa
-                            payload: payload
-                        })
-                    });
-
-                    const result = await response.json();
-                    
-                    if (response.ok && result.success) {
-                        printLog(`[THÀNH CÔNG] Server phản hồi: ${JSON.stringify(result.data)}`);
-                    } else {
-                        printLog(`[THẤT BẠI] Lỗi từ máy chủ: ${JSON.stringify(result.error)}`, true);
-                    }
-                } catch (error) {
-                    printLog(`[LỖI MẠNG] ${error.message}`, true);
-                } finally {
-                    btn.disabled = false; btn.innerText = "🚀 THỰC THI GỬI LÊN MÁY CHỦ";
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>

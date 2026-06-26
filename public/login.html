@@ -144,12 +144,12 @@
 
                     localStorage.setItem('lge_token', result.data.token);
                     localStorage.setItem('lge_emp_name', result.data.employeeName);
-                    
+                    localStorage.setItem('lge_expire_text', result.expireText);
                     msgBox.style.color = "#059669"; msgBox.innerText = "Đăng nhập thành công!";
                     setTimeout(() => { window.location.href = 'index.html'; }, 1000);
                 } else {
                     msgBox.style.color = "#dc3545"; 
-                    msgBox.innerText = result.error || "Sai thông tin đăng nhập!";
+                    msgBox.innerText = result.error || "Sai thông tin đăng nhập! Hoặc tài khoản đã hết hạn!";
                 }
             } catch (error) {
                 msgBox.style.color = "#dc3545"; msgBox.innerText = "Lỗi kết nối máy chủ!";

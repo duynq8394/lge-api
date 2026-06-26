@@ -4,13 +4,10 @@ const axios = require('axios');
 const path = require('path');
 const admin = require('firebase-admin');
 
-// Cấu hình Firebase đọc từ Render Secret File hoặc Local
 const serviceAccountPath = process.env.FIREBASE_KEY_PATH || './firebase-key.json';
 const serviceAccount = require(serviceAccountPath);
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
 const app = express();
@@ -36,67 +33,72 @@ const getBaseHeaders = (token) => ({
 // API PROXY (LGE APP)
 // ==========================================
 
-// 1. LOGIN (CÓ KIỂM TRA WHITELIST)
 app.post('/proxy-login', async (req, res) => {
     const { payload } = req.body;
-    const requestUser = payload.username;
+    // Chuyển username thành chữ thường để không phân biệt hoa/thường (VD: P.tester = p.tester)
+    const requestUser = payload.username.trim().toLowerCase();
 
     try {
-        // Kiểm tra Whitelist trên Firebase
         const testerDoc = await db.collection('testers').doc(requestUser).get();
         if (!testerDoc.exists) {
-            return res.status(403).json({ 
-                success: false, 
-                error: "Tài khoản chưa được cấp quyền thử nghiệm (Beta). Vui lòng liên hệ Admin!" 
-            });
+            return res.status(403).json({ success: false, error: "Tài khoản chưa được cấp quyền (Whitelist)!" });
         }
 
-        // Vượt qua Whitelist -> Gọi LGE API
+        const userData = testerDoc.data();
+        let expireText = "Vĩnh viễn";
+
+        // KIỂM TRA HẠN SỬ DỤNG
+        if (userData.expiresAt) {
+            const now = new Date().getTime();
+            if (now > userData.expiresAt) {
+                return res.status(403).json({ success: false, error: "Tài khoản của bạn đã hết hạn sử dụng. Vui lòng liên hệ Admin gia hạn!" });
+            }
+            // Tính số ngày còn lại
+            const daysLeft = Math.ceil((userData.expiresAt - now) / (1000 * 60 * 60 * 24));
+            expireText = `còn ${daysLeft} ngày`;
+        }
+
+        // Nếu qua ải kiểm tra -> Đăng nhập vào LG
         const response = await axios.post('https://lge-api.sucbat.com.vn/users/login/', payload, { headers: getBaseHeaders(null) });
-        res.status(response.status).json({ success: true, data: response.data });
+        
+        // Trả thêm thông tin expireText về cho App hiển thị
+        res.status(response.status).json({ success: true, data: response.data, expireText: expireText });
     } catch (error) {
         res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
     }
 });
 
+// (Giữ nguyên các hàm proxy-upload, proxy-get-shops, proxy-get-history cũ ở đây...)
 app.post('/proxy-upload', async (req, res) => {
     try {
         const response = await axios.post('https://lge-api.sucbat.com.vn/attendants/upload', req.body.payload, { headers: getBaseHeaders(req.body.token) });
         res.status(response.status).json({ success: true, data: response.data });
-    } catch (error) {
-        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
-    }
+    } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
 });
 
 app.post('/proxy-get-shops', async (req, res) => {
     try {
         const response = await axios.get('https://lge-api.sucbat.com.vn/shops/storemaintant', { headers: getBaseHeaders(req.body.token) });
         res.status(response.status).json({ success: true, data: response.data });
-    } catch (error) {
-        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
-    }
+    } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
 });
 
 app.post('/proxy-get-history', async (req, res) => {
     try {
         const customHeaders = getBaseHeaders(req.body.token);
-        customHeaders['shopid'] = '0'; 
-        customHeaders['attendantdate'] = req.body.date; 
+        customHeaders['shopid'] = '0'; customHeaders['attendantdate'] = req.body.date; 
         const response = await axios.get('https://lge-api.sucbat.com.vn/attendants/byshop', { headers: customHeaders });
         res.status(response.status).json({ success: true, data: response.data });
-    } catch (error) {
-        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
-    }
+    } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
 });
 
 // ==========================================
-// API QUẢN TRỊ VIÊN (ADMIN PANEL)
+// API QUẢN TRỊ VIÊN
 // ==========================================
 
 const verifyAdmin = async (req, res, next) => {
     const { admin_pass } = req.headers;
     const configDoc = await db.collection('admin_config').doc('settings').get();
-    // Tạo sẵn 1 bản ghi admin_config/settings với field password trên Firebase
     if (!configDoc.exists || configDoc.data().password !== admin_pass) {
         return res.status(401).json({ success: false, error: "Sai mật khẩu quản trị viên!" });
     }
@@ -113,20 +115,33 @@ app.get('/admin/testers', verifyAdmin, async (req, res) => {
 });
 
 app.post('/admin/testers', verifyAdmin, async (req, res) => {
-    const { username, note } = req.body;
+    const { username, note, duration } = req.body;
     if (!username) return res.status(400).json({ success: false, error: "Thiếu tên tài khoản!" });
+    
+    // Lưu tài khoản dưới dạng chữ thường toàn bộ
+    const normalizedUsername = username.trim().toLowerCase();
+    
+    // Tính toán thời gian hết hạn (Timestamp)
+    let expiresAt = null; // Mặc định là vĩnh viễn
+    if (duration !== "permanent") {
+        const days = parseInt(duration);
+        expiresAt = new Date().getTime() + (days * 24 * 60 * 60 * 1000);
+    }
+
     try {
-        await db.collection('testers').doc(username).set({
+        await db.collection('testers').doc(normalizedUsername).set({
             addedAt: new Date().toISOString(),
-            note: note || "Tham gia Beta Test"
+            note: note || "",
+            expiresAt: expiresAt
         });
-        res.json({ success: true, message: `Đã cấp quyền cho ${username}` });
+        res.json({ success: true, message: `Đã cấp quyền cho ${normalizedUsername}` });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 app.delete('/admin/testers/:username', verifyAdmin, async (req, res) => {
     try {
-        await db.collection('testers').doc(req.params.username).delete();
+        const normalizedUsername = req.params.username.trim().toLowerCase();
+        await db.collection('testers').doc(normalizedUsername).delete();
         res.json({ success: true, message: "Đã thu hồi quyền." });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });

@@ -7,7 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!token) { window.location.href = 'login.html'; return; }
     
     const nameDisplay = document.getElementById('empNameDisplay');
-    if(nameDisplay) nameDisplay.innerText = empName;
+    const expireText = localStorage.getItem('lge_expire_text');
+    if(nameDisplay) {
+        let displayName = empName;
+        // Ghép thêm Hạn sử dụng kế bên tên hiển thị
+        if (expireText) {
+            displayName += ` (Hạn: ${expireText})`;
+        }
+        nameDisplay.innerText = displayName;
+    }
 
     loadShops(); loadHistory();
 

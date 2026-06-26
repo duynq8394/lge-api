@@ -6,40 +6,53 @@
     <title>LGE Admin Panel</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #333;}
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        h2 { color: #1a73e8; margin-top: 0; text-align: center;}
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        h2 { color: #a50034; margin-top: 0; text-align: center;}
         .login-section { text-align: center; padding: 50px 0; }
         .dashboard-section { display: none; }
-        input { padding: 12px; width: 250px; border: 1px solid #ddd; border-radius: 6px; outline: none;}
-        button { padding: 12px 20px; background: #1a73e8; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
-        .add-box { background: #e6f4ea; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap;}
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 15px; border-bottom: 1px solid #eee; text-align: left; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 10px; font-size: 14px;}
+        button { padding: 10px 15px; background: #a50034; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
+        .add-box { background: #fff5f7; border: 1px solid #ffccd5; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;}
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;}
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
         th { background: #fafafa; font-weight: 600; }
-        .btn-danger { background: #dc3545; padding: 8px 12px; font-size: 13px;}
+        .btn-danger { background: #dc3545; padding: 6px 10px; font-size: 12px;}
+        .badge-active { background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;}
+        .badge-expired { background: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;}
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>⚙️ ADMIN PANEL - TESTER MANAGEMENT</h2>
+    <h2>⚙️ ADMIN PANEL - WHITELIST</h2>
     
     <div class="login-section" id="loginSection">
-        <p style="margin-bottom: 20px;">Nhập mật khẩu Master để quản lý danh sách truy cập:</p>
+        <p style="margin-bottom: 20px;">Nhập mật khẩu Master để quản lý:</p>
         <input type="password" id="adminPass" placeholder="Mật khẩu Admin..." onkeyup="if(event.keyCode==13) loginAdmin()">
         <button onclick="loginAdmin()">Vào hệ thống</button>
     </div>
 
     <div class="dashboard-section" id="dashboardSection">
         <div class="add-box">
-            <input type="text" id="newUsername" placeholder="Mã NV / Username...">
-            <input type="text" id="newNote" placeholder="Tên / Ghi chú (VD: Test iOS)...">
+            <input type="text" id="newUsername" placeholder="Mã NV (Tên Đăng Nhập)..." style="width: 180px;">
+            <input type="text" id="newNote" placeholder="Tên / Ghi chú..." style="width: 180px;">
+            
+            <select id="durationSelect" onchange="toggleCustomDays()">
+                <option value="30">30 Ngày</option>
+                <option value="60">60 Ngày</option>
+                <option value="90">90 Ngày</option>
+                <option value="permanent">Vĩnh viễn</option>
+                <option value="custom">Tự nhập số ngày...</option>
+            </select>
+            
+            <input type="number" id="customDays" placeholder="Số ngày..." style="display:none; width: 100px;">
+            
             <button onclick="addTester()" style="background: #28a745;">+ Cấp quyền</button>
-            <button onclick="loadTesters()" style="background: #6c757d;">🔄 Tải lại</button>
+            <button onclick="loadTesters()" style="background: #6c757d;">🔄 Làm mới</button>
         </div>
 
         <table>
-            <thead><tr><th>Tài khoản</th><th>Ghi chú</th><th>Ngày cấp quyền</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Tài khoản</th><th>Ghi chú</th><th>Ngày tạo</th><th>Hết hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
             <tbody id="testersTableBody"></tbody>
         </table>
     </div>
@@ -57,6 +70,11 @@
         }
     }
 
+    function toggleCustomDays() {
+        const val = document.getElementById('durationSelect').value;
+        document.getElementById('customDays').style.display = (val === 'custom') ? 'inline-block' : 'none';
+    }
+
     async function loadTesters() {
         const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
         const result = await res.json();
@@ -64,35 +82,57 @@
         
         if (result.success) {
             tbody.innerHTML = '';
+            const now = new Date().getTime();
+
             result.data.forEach(user => {
-                const dateStr = new Date(user.addedAt).toLocaleString('vi-VN');
+                const addedStr = new Date(user.addedAt).toLocaleDateString('vi-VN');
+                let expireStr = "Vĩnh viễn";
+                let statusBadge = `<span class="badge-active">Hoạt động</span>`;
+
+                if (user.expiresAt) {
+                    expireStr = new Date(user.expiresAt).toLocaleDateString('vi-VN');
+                    if (now > user.expiresAt) {
+                        statusBadge = `<span class="badge-expired">Hết hạn</span>`;
+                    }
+                }
+
                 tbody.innerHTML += `
                     <tr>
-                        <td style="color:#1a73e8; font-weight:bold;">${user.username}</td>
+                        <td style="color:#a50034; font-weight:bold;">${user.username}</td>
                         <td>${user.note}</td>
-                        <td style="font-size: 13px; color: #666;">${dateStr}</td>
+                        <td>${addedStr}</td>
+                        <td><b>${expireStr}</b></td>
+                        <td>${statusBadge}</td>
                         <td><button class="btn-danger" onclick="removeTester('${user.username}')">Xóa</button></td>
                     </tr>
                 `;
             });
         } else {
-            alert(result.error);
-            location.reload(); 
+            alert(result.error); location.reload(); 
         }
     }
 
     async function addTester() {
         const username = document.getElementById('newUsername').value.trim();
         const note = document.getElementById('newNote').value.trim();
+        let duration = document.getElementById('durationSelect').value;
+
         if(!username) return alert("Vui lòng nhập Username");
+        
+        if (duration === 'custom') {
+            duration = document.getElementById('customDays').value;
+            if (!duration || duration <= 0) return alert("Vui lòng nhập số ngày hợp lệ!");
+        }
 
         const res = await fetch('/admin/testers', {
             method: 'POST', headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
-            body: JSON.stringify({ username, note })
+            body: JSON.stringify({ username, note, duration })
         });
         const result = await res.json();
         if(result.success) {
-            document.getElementById('newUsername').value = ''; document.getElementById('newNote').value = '';
+            document.getElementById('newUsername').value = ''; 
+            document.getElementById('newNote').value = '';
+            document.getElementById('customDays').value = '';
             loadTesters();
         } else { alert(result.error); }
     }

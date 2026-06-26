@@ -3,53 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Upload Ẩn Danh PRO</title>
+    <title>LGE Web App</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h2>🔥 SECURE PROXY UPLOADER</h2>
-        <div class="warning-box">
-            <strong>Nguyên tắc an toàn:</strong> Luôn screenshot lại ảnh để xóa EXIF (metadata) trước khi chọn file tải lên hệ thống.
-        </div>
-        
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label>Authorization Token (Bearer):</label>
-            <textarea id="token" rows="2" placeholder="Dán mã Token (eyJhb...) vào đây..."></textarea>
+    <div class="top-bar">
+        <div>Xin chào, <b id="empNameDisplay">...</b></div>
+        <button class="btn-logout" onclick="logout()">Đăng xuất</button>
+    </div>
+
+    <div class="main-layout">
+        <div class="container upload-section">
+            <h2>🔥 UPLOAD BÁO CÁO</h2>
+            <div class="warning-box">Hãy chọn cửa hàng và vị trí chính xác trước khi gửi ảnh.</div>
             
-            <div id="userInfoDisplay" class="info-box" style="display: none;"></div>
-        </div>
-        
-        <div class="form-row">
             <div class="form-group">
-                <label>ShopId:</label>
-                <input type="number" id="shopId" value="359285">
+                <label>Cửa hàng (Tự động tải):</label>
+                <select id="shopSelect">
+                    <option value="">Đang tải danh sách cửa hàng...</option>
+                </select>
             </div>
-            <div class="form-group">
-                <label>ShopCode:</label>
-                <input type="text" id="shopCode" value="EASV11016">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Vĩ độ (Lat):</label>
+                    <input type="text" id="lat" value="21.17003169232964">
+                </div>
+                <div class="form-group">
+                    <label>Kinh độ (Lng):</label>
+                    <input type="text" id="lng" value="106.05863329637819">
+                </div>
             </div>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label>Chọn ảnh báo cáo:</label>
+                <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg">
+            </div>
+
+            <button id="btnSubmit">🚀 GỬI BÁO CÁO</button>
+            <div class="log-terminal" id="logBox">Hệ thống sẵn sàng...</div>
         </div>
 
-        <div class="form-row">
-            <div class="form-group">
-                <label>Vĩ độ (Latitude):</label>
-                <input type="text" id="lat" value="21.17003169232964">
-            </div>
-            <div class="form-group">
-                <label>Kinh độ (Longitude):</label>
-                <input type="text" id="lng" value="106.05863329637819">
-            </div>
+        <div class="container history-section">
+            <h2>🕒 LỊCH SỬ HÔM NAY</h2>
+            <button onclick="loadHistory()" style="margin-bottom: 15px; background: #6c757d; padding: 8px;">Làm mới</button>
+            <div id="historyList" class="history-list">
+                </div>
         </div>
-
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label>Chọn ảnh báo cáo (Đã xóa EXIF):</label>
-            <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg">
-        </div>
-
-        <button id="btnSubmit">🚀 THỰC THI GỬI LÊN MÁY CHỦ</button>
-        
-        <div class="log-terminal" id="logBox">[SYSTEM] Khởi tạo thành công. Máy chủ proxy đang chờ lệnh...</div>
     </div>
 
     <script src="app.js"></script>

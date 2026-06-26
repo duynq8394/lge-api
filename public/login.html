@@ -2,106 +2,161 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng Nhập - LGE System</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Đăng Nhập - Hệ Thống LGE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #e9ecef;}
-        .login-container { width: 100%; max-width: 400px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .login-title { text-align: center; color: #1a73e8; margin-bottom: 20px; font-size: 24px; font-weight: bold; }
-        .msg-box { text-align: center; margin-bottom: 15px; font-size: 14px; font-weight: 600; min-height: 20px; }
-        .checkbox-group { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 14px; cursor: pointer; color: #555;}
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent;}
+        body { 
+            display: flex; justify-content: center; align-items: center; 
+            min-height: 100vh; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); 
+        }
+        
+        .login-card { 
+            background: white; width: 100%; max-width: 400px; 
+            padding: 40px 30px; border-radius: 24px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.08); 
+            margin: 20px;
+        }
+
+        .logo-area { text-align: center; margin-bottom: 35px; }
+        .logo-area h1 { color: #a50034; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+        .logo-area p { color: #6b7280; font-size: 14px; font-weight: 500;}
+        
+        .input-group { margin-bottom: 22px; position: relative; }
+        .input-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+        .input-group input { 
+            width: 100%; padding: 15px 16px; 
+            border: 1.5px solid #e5e7eb; border-radius: 12px; 
+            font-size: 15px; background: #f9fafb; 
+            transition: all 0.3s ease; outline: none; color: #111827;
+        }
+        .input-group input::placeholder { color: #9ca3af; }
+        .input-group input:focus { border-color: #a50034; background: white; box-shadow: 0 0 0 4px rgba(165, 0, 52, 0.1); }
+        
+        .options { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; font-size: 14px; }
+        .checkbox-label { display: flex; align-items: center; gap: 8px; color: #4b5563; cursor: pointer; font-weight: 500; }
+        .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; accent-color: #a50034; cursor: pointer; }
+        
+        .btn-login { 
+            width: 100%; padding: 16px; 
+            background: #a50034; color: white; 
+            border: none; border-radius: 12px; 
+            font-size: 16px; font-weight: 700; 
+            cursor: pointer; transition: all 0.3s; 
+            box-shadow: 0 4px 12px rgba(165, 0, 52, 0.25);
+        }
+        .btn-login:hover { background: #8a002b; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(165, 0, 52, 0.3); }
+        .btn-login:active { transform: translateY(1px); box-shadow: none; }
+        .btn-login:disabled { background: #fca5a5; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        #msgBox { text-align: center; margin-bottom: 20px; font-size: 14px; font-weight: 600; min-height: 20px; transition: 0.3s; }
+        
+        .footer-text { text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af; }
+
+        @media (max-width: 480px) {
+            .login-card { padding: 35px 25px; border-radius: 20px; }
+            .logo-area h1 { font-size: 26px; }
+        }
     </style>
 </head>
 <body>
 
-<div class="login-container">
-    <div class="login-title">ĐĂNG NHẬP</div>
-    <div class="msg-box" id="msgBox"></div>
+    <div class="login-card">
+        <div class="logo-area">
+            <h1>LGE FIELD FORCE</h1>
+            <p>Phiên bản WebApp Beta</p>
+        </div>
 
-    <div class="form-group">
-        <label>Tài khoản:</label>
-        <input type="text" id="username" placeholder="Nhập tài khoản...">
+        <div id="msgBox"></div>
+
+        <div class="input-group">
+            <label>Tài khoản / Username</label>
+            <input type="text" id="username" placeholder="Nhập mã nhân viên...">
+        </div>
+
+        <div class="input-group">
+            <label>Mật khẩu / Password</label>
+            <input type="password" id="password" placeholder="Nhập mật khẩu..." onkeyup="if(event.keyCode==13) processLogin()">
+        </div>
+
+        <div class="options">
+            <label class="checkbox-label">
+                <input type="checkbox" id="rememberMe"> Nhớ tài khoản
+            </label>
+        </div>
+
+        <button class="btn-login" id="btnLogin" onclick="processLogin()">ĐĂNG NHẬP</button>
+
+        <div class="footer-text">
+            Chỉ dành cho tài khoản nội bộ (Whitelist)
+        </div>
     </div>
 
-    <div class="form-group">
-        <label>Mật khẩu:</label>
-        <input type="password" id="password" placeholder="Nhập mật khẩu...">
-    </div>
+    <script>
+        if (localStorage.getItem('lge_token')) window.location.href = 'index.html';
 
-    <label class="checkbox-group">
-        <input type="checkbox" id="rememberMe"> Nhớ tài khoản & mật khẩu
-    </label>
-
-    <button id="btnLogin" onclick="processLogin()">ĐĂNG NHẬP</button>
-</div>
-
-<script>
-    if (localStorage.getItem('lge_token')) window.location.href = 'index.html';
-
-    // Tự động điền nếu đã nhớ
-    window.onload = () => {
-        if (localStorage.getItem('lge_saved_user')) {
-            document.getElementById('username').value = localStorage.getItem('lge_saved_user');
-            document.getElementById('password').value = localStorage.getItem('lge_saved_pass');
-            document.getElementById('rememberMe').checked = true;
-        }
-    };
-
-    function getClientTime() {
-        const now = new Date();
-        const pad = n => n.toString().padStart(2, '0');
-        return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    }
-
-    async function processLogin() {
-        const user = document.getElementById('username').value.trim();
-        const pass = document.getElementById('password').value.trim();
-        const remember = document.getElementById('rememberMe').checked;
-        const msgBox = document.getElementById('msgBox');
-        const btn = document.getElementById('btnLogin');
-
-        if (!user || !pass) { msgBox.style.color = '#dc3545'; msgBox.innerText = 'Vui lòng nhập đầy đủ!'; return; }
-
-        btn.disabled = true; btn.innerText = "ĐANG XÁC THỰC..."; msgBox.innerText = "";
-
-        const payload = {
-            "username": user, "password": pass, "client_time": getClientTime(),
-            "DeviceToken": "emMYBh-1sUq9shk3XNGqQL:APA...", "Platform": "ios",
-            "IMEI": crypto.randomUUID().toUpperCase(), "AppId": "20H343", "versionid": "39"
+        window.onload = () => {
+            if (localStorage.getItem('lge_saved_user')) {
+                document.getElementById('username').value = localStorage.getItem('lge_saved_user');
+                document.getElementById('password').value = localStorage.getItem('lge_saved_pass');
+                document.getElementById('rememberMe').checked = true;
+            }
         };
 
-        try {
-            const response = await fetch('/proxy-login', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ payload: payload })
-            });
-            const result = await response.json();
-
-            if (response.ok && result.success && result.data.token) {
-                // Lưu nhớ mật khẩu
-                if (remember) {
-                    localStorage.setItem('lge_saved_user', user);
-                    localStorage.setItem('lge_saved_pass', pass);
-                } else {
-                    localStorage.removeItem('lge_saved_user');
-                    localStorage.removeItem('lge_saved_pass');
-                }
-
-                localStorage.setItem('lge_token', result.data.token);
-                localStorage.setItem('lge_emp_name', result.data.employeeName);
-                
-                msgBox.style.color = "#28a745"; msgBox.innerText = "Đăng nhập thành công!";
-                setTimeout(() => { window.location.href = 'index.html'; }, 1000);
-            } else {
-                msgBox.style.color = "#dc3545"; msgBox.innerText = "Sai thông tin đăng nhập!";
-            }
-        } catch (error) {
-            msgBox.style.color = "#dc3545"; msgBox.innerText = "Lỗi kết nối máy chủ!";
-        } finally {
-            btn.disabled = false; btn.innerText = "ĐĂNG NHẬP";
+        function getClientTime() {
+            const now = new Date();
+            const pad = n => n.toString().padStart(2, '0');
+            return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
         }
-    }
-</script>
+
+        async function processLogin() {
+            const user = document.getElementById('username').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            const remember = document.getElementById('rememberMe').checked;
+            const msgBox = document.getElementById('msgBox');
+            const btn = document.getElementById('btnLogin');
+
+            if (!user || !pass) { msgBox.style.color = '#dc3545'; msgBox.innerText = 'Vui lòng nhập đầy đủ!'; return; }
+
+            btn.disabled = true; btn.innerText = "ĐANG XÁC THỰC..."; msgBox.innerText = "";
+
+            const payload = {
+                "username": user, "password": pass, "client_time": getClientTime(),
+                "DeviceToken": "emMYBh-1sUq9shk3XNGqQL:APA91bE8HYJwBXwjJv59xcIEPmwPlpngzmMoPVG6J2h7tKEwdyy8tJdBbJ49eD9zyWql6iK_C_3tx9G1NA5AlMyXcXXzNJmeV0Ue5QnIl8veQo7XwtIyExA", 
+                "Platform": "ios", "IMEI": crypto.randomUUID().toUpperCase(), "AppId": "20H343", "versionid": "39"
+            };
+
+            try {
+                const response = await fetch('/proxy-login', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payload: payload })
+                });
+                const result = await response.json();
+
+                if (response.ok && result.success && result.data.token) {
+                    if (remember) {
+                        localStorage.setItem('lge_saved_user', user);
+                        localStorage.setItem('lge_saved_pass', pass);
+                    } else {
+                        localStorage.removeItem('lge_saved_user'); localStorage.removeItem('lge_saved_pass');
+                    }
+
+                    localStorage.setItem('lge_token', result.data.token);
+                    localStorage.setItem('lge_emp_name', result.data.employeeName);
+                    
+                    msgBox.style.color = "#059669"; msgBox.innerText = "Đăng nhập thành công!";
+                    setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+                } else {
+                    msgBox.style.color = "#dc3545"; 
+                    msgBox.innerText = result.error || "Sai thông tin đăng nhập!";
+                }
+            } catch (error) {
+                msgBox.style.color = "#dc3545"; msgBox.innerText = "Lỗi kết nối máy chủ!";
+            } finally {
+                btn.disabled = false; btn.innerText = "ĐĂNG NHẬP";
+            }
+        }
+    </script>
 </body>
 </html>

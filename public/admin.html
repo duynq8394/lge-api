@@ -22,7 +22,6 @@
     </style>
 </head>
 <body>
-
 <div class="container">
     <h2>⚙️ ADMIN PANEL - WHITELIST</h2>
     
@@ -36,7 +35,6 @@
         <div class="add-box">
             <input type="text" id="newUsername" placeholder="Mã NV (Tên Đăng Nhập)..." style="width: 180px;">
             <input type="text" id="newNote" placeholder="Tên / Ghi chú..." style="width: 180px;">
-            
             <select id="durationSelect" onchange="toggleCustomDays()">
                 <option value="30">30 Ngày</option>
                 <option value="60">60 Ngày</option>
@@ -44,20 +42,16 @@
                 <option value="permanent">Vĩnh viễn</option>
                 <option value="custom">Tự nhập số ngày...</option>
             </select>
-            
             <input type="number" id="customDays" placeholder="Số ngày..." style="display:none; width: 100px;">
-            
             <button onclick="addTester()" style="background: #28a745;">+ Cấp quyền</button>
             <button onclick="loadTesters()" style="background: #6c757d;">🔄 Làm mới</button>
         </div>
-
         <table>
             <thead><tr><th>Tài khoản</th><th>Ghi chú</th><th>Ngày tạo</th><th>Hết hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
             <tbody id="testersTableBody"></tbody>
         </table>
     </div>
 </div>
-
 <script>
     let adminPassword = "";
 
@@ -83,19 +77,14 @@
         if (result.success) {
             tbody.innerHTML = '';
             const now = new Date().getTime();
-
             result.data.forEach(user => {
                 const addedStr = new Date(user.addedAt).toLocaleDateString('vi-VN');
                 let expireStr = "Vĩnh viễn";
                 let statusBadge = `<span class="badge-active">Hoạt động</span>`;
-
                 if (user.expiresAt) {
                     expireStr = new Date(user.expiresAt).toLocaleDateString('vi-VN');
-                    if (now > user.expiresAt) {
-                        statusBadge = `<span class="badge-expired">Hết hạn</span>`;
-                    }
+                    if (now > user.expiresAt) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
                 }
-
                 tbody.innerHTML += `
                     <tr>
                         <td style="color:#a50034; font-weight:bold;">${user.username}</td>
@@ -107,21 +96,18 @@
                     </tr>
                 `;
             });
-        } else {
-            alert(result.error); location.reload(); 
-        }
+        } else { alert(result.error); location.reload(); }
     }
 
     async function addTester() {
         const username = document.getElementById('newUsername').value.trim();
         const note = document.getElementById('newNote').value.trim();
         let duration = document.getElementById('durationSelect').value;
-
         if(!username) return alert("Vui lòng nhập Username");
         
         if (duration === 'custom') {
             duration = document.getElementById('customDays').value;
-            if (!duration || duration <= 0) return alert("Vui lòng nhập số ngày hợp lệ!");
+            if (!duration || duration <= 0) return alert("Số ngày không hợp lệ!");
         }
 
         const res = await fetch('/admin/testers', {
@@ -130,9 +116,7 @@
         });
         const result = await res.json();
         if(result.success) {
-            document.getElementById('newUsername').value = ''; 
-            document.getElementById('newNote').value = '';
-            document.getElementById('customDays').value = '';
+            document.getElementById('newUsername').value = ''; document.getElementById('newNote').value = '';
             loadTesters();
         } else { alert(result.error); }
     }

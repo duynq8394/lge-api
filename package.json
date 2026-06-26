@@ -1,5 +1,5 @@
 {
-  "name": "anti-detect-upload",
+  "name": "lge-webapp-beta",
   "version": "1.0.0",
   "description": "Proxy Upload System LGE - Mobile Version",
   "main": "server.js",

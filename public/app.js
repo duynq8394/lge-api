@@ -1,19 +1,19 @@
 const API_BASE = "https://lge-api.sucbat.com.vn";
 let token = "";
+let reqUser = "";
 
 document.addEventListener('DOMContentLoaded', () => {
     token = localStorage.getItem('lge_token');
     const empName = localStorage.getItem('lge_emp_name');
+    const expireText = localStorage.getItem('lge_expire_text');
+    reqUser = localStorage.getItem('lge_username');
+
     if (!token) { window.location.href = 'login.html'; return; }
     
     const nameDisplay = document.getElementById('empNameDisplay');
-    const expireText = localStorage.getItem('lge_expire_text');
     if(nameDisplay) {
         let displayName = empName;
-        // Ghép thêm Hạn sử dụng kế bên tên hiển thị
-        if (expireText) {
-            displayName += ` (Hạn: ${expireText})`;
-        }
+        if (expireText) displayName += ` (Hạn: ${expireText})`;
         nameDisplay.innerText = displayName;
     }
 
@@ -38,7 +38,7 @@ function switchTab(tabId, navElement) {
 }
 
 function logout() {
-    localStorage.removeItem('lge_token'); localStorage.removeItem('lge_emp_name');
+    localStorage.clear();
     window.location.href = 'login.html';
 }
 
@@ -58,10 +58,22 @@ function getRealTime() {
     };
 }
 
+// Xử lý lỗi từ server, nếu isExpired thì đá văng ra ngoài
+function handleMiddlewareError(result) {
+    if (result.isExpired) {
+        alert(result.error);
+        logout();
+        return true;
+    }
+    return false;
+}
+
 async function loadShops() {
     try {
-        const res = await fetch('/proxy-get-shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token }) });
+        const res = await fetch('/proxy-get-shops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, request_user: reqUser }) });
         const result = await res.json();
+        if(handleMiddlewareError(result)) return;
+
         if (result.success && result.data?.data) {
             const select = document.getElementById('shopSelect');
             if(!select) return;
@@ -85,10 +97,11 @@ async function loadHistory() {
     listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color: #666;'>⏳ Đang tải dữ liệu...</div>";
 
     try {
-        const res = await fetch('/proxy-get-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, date: dateStr }) });
+        const res = await fetch('/proxy-get-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, request_user: reqUser, date: dateStr }) });
         const result = await res.json();
+        if(handleMiddlewareError(result)) return;
+
         listDiv.innerHTML = "";
-        
         if (result.success && result.data?.data?.length > 0) {
             const historyData = result.data.data.reverse(); 
             historyData.forEach(item => {
@@ -110,7 +123,6 @@ async function loadHistory() {
     } catch (e) { listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color:#dc3545;'>Lỗi tải lịch sử!</div>"; }
 }
 
-// UPLOAD BẰNG CANVAS (XÓA EXIF METADATA)
 const btnSubmit = document.getElementById('btnSubmit');
 if (btnSubmit) {
     btnSubmit.addEventListener('click', () => {
@@ -129,12 +141,11 @@ if (btnSubmit) {
         reader.onload = function(e) {
             const img = new Image();
             img.onload = async function() {
-                // XÓA EXIF METADATA
+                // XÓA EXIF METADATA QUA CANVAS
                 const canvas = document.createElement('canvas');
                 canvas.width = img.width; canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
-                // Xuất ảnh Base64 sạch (quality 0.9)
                 const cleanBase64Data = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
 
                 try {
@@ -158,10 +169,12 @@ if (btnSubmit) {
                     printLog("Đang đẩy dữ liệu lên máy chủ...");
                     const response = await fetch('/proxy-upload', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token: token, payload: payload })
+                        body: JSON.stringify({ token: token, request_user: reqUser, payload: payload })
                     });
                     const result = await response.json();
                     
+                    if(handleMiddlewareError(result)) return;
+
                     if (response.ok && result.success) {
                         printLog(`[THÀNH CÔNG] Dữ liệu đã được ghi nhận.`);
                         fileInput.value = ""; document.getElementById('fileNameDisplay').innerHTML = "";

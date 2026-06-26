@@ -19,25 +19,16 @@
     </header>
 
     <main class="app-body">
-        
         <div id="tab-upload" class="tab-pane active">
             <div class="card">
                 <div class="card-title">📍 Thông tin Check-in</div>
                 <div class="form-group">
                     <label>Cửa hàng / Shop:</label>
-                    <select id="shopSelect" class="form-control">
-                        <option value="">Đang tải dữ liệu...</option>
-                    </select>
+                    <select id="shopSelect" class="form-control"><option value="">Đang tải dữ liệu...</option></select>
                 </div>
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Vĩ độ (Lat):</label>
-                        <input type="number" step="any" id="lat" class="form-control" value="21.17003169232964">
-                    </div>
-                    <div class="form-group">
-                        <label>Kinh độ (Lng):</label>
-                        <input type="number" step="any" id="lng" class="form-control" value="106.05863329637819">
-                    </div>
+                    <div class="form-group"><label>Vĩ độ (Lat):</label><input type="number" step="any" id="lat" class="form-control" value="21.17003169232964"></div>
+                    <div class="form-group"><label>Kinh độ (Lng):</label><input type="number" step="any" id="lng" class="form-control" value="106.05863329637819"></div>
                 </div>
             </div>
 
@@ -49,11 +40,10 @@
                         <div>Chạm để chọn ảnh từ thư viện</div>
                     </label>
                     <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg" style="display: none;">
-                    <div id="fileNameDisplay" style="text-align: center; margin-top: 10px; font-size: 12px; color: #1a73e8; font-weight: bold;"></div>
+                    <div id="fileNameDisplay" style="text-align: center; margin-top: 10px; font-size: 12px; color: #a50034; font-weight: bold;"></div>
                 </div>
                 <button id="btnSubmit" class="btn-primary">🚀 GỬI BÁO CÁO</button>
             </div>
-
             <div class="log-terminal" id="logBox">Hệ thống sẵn sàng...</div>
         </div>
 
@@ -62,23 +52,18 @@
                 <h3>Lịch sử hôm nay</h3>
                 <button onclick="loadHistory()" class="btn-refresh">🔄 Làm mới</button>
             </div>
-            <div id="historyList" class="history-list">
-                </div>
+            <div id="historyList" class="history-list"></div>
         </div>
-
     </main>
 
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="switchTab('tab-upload', this)">
-            <div class="nav-icon">📤</div>
-            <div class="nav-label">Báo Cáo</div>
+            <div class="nav-icon">📤</div><div class="nav-label">Báo Cáo</div>
         </div>
         <div class="nav-item" onclick="switchTab('tab-history', this)">
-            <div class="nav-icon">🕒</div>
-            <div class="nav-label">Lịch Sử</div>
+            <div class="nav-icon">🕒</div><div class="nav-label">Lịch Sử</div>
         </div>
     </nav>
-
     <script src="app.js"></script>
 </body>
 </html>

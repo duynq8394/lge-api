@@ -1,7 +1,7 @@
 const API_BASE = "https://lge-api.sucbat.com.vn";
 let token = "";
 let reqUser = "";
-let nextPhotoType = "0"; // Lưu trữ loại báo cáo tự động tính toán tiếp theo
+let nextPhotoType = "0"; 
 
 document.addEventListener('DOMContentLoaded', () => {
     token = localStorage.getItem('lge_token');
@@ -16,6 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let displayName = empName;
         if (expireText) displayName += ` (${expireText})`;
         nameDisplay.innerText = displayName;
+    }
+
+    // NÂNG CẤP: Tự động khôi phục điểm neo cũ từ bộ nhớ máy người dùng
+    const savedAnchor = localStorage.getItem('lge_custom_anchor');
+    if (savedAnchor && document.getElementById('customAnchorInput')) {
+        document.getElementById('customAnchorInput').value = savedAnchor;
     }
 
     loadShops(); loadHistory();
@@ -50,7 +56,7 @@ function printLog(msg) {
     logBox.scrollTop = logBox.scrollHeight;
 }
 
-// THUẬT TOÁN ĐỘ NHIỄU GPS HÌNH TRÒN PHÂN BỐ ĐỀU (BÁN KÍNH 1m - 45m AN TOÀN TUYỆT ĐỐI)
+// THUẬT TOÁN ĐỘ NHIỄU GPS HÌNH TRÒN PHÂN BỐ ĐỀU CHUẨN XÁC TOÁN HỌC
 function addGpsNoise(lat, lng, maxMeters = 45) {
     const r = 1 + Math.random() * (maxMeters - 1); 
     const theta = Math.random() * 2 * Math.PI; 
@@ -64,6 +70,31 @@ function addGpsNoise(lat, lng, maxMeters = 45) {
     };
 }
 
+// THUẬT TOÁN HAVERSINE: Tính khoảng cách chính xác theo mét giữa 2 cặp tọa độ toàn cầu
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Bán kính Trái Đất theo mét
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; 
+}
+
+// Trích xuất làm sạch chuỗi tọa độ được dán từ Google Maps (hỗ trợ cả dấu phẩy, dấu ngoặc)
+function parseCoords(text) {
+    if (!text) return null;
+    const clean = text.replace(/[()]/g, '').trim();
+    const parts = clean.split(/[,]+/);
+    if (parts.length >= 2) {
+        const lat = parseFloat(parts[0].replace(/,/g, '.').trim());
+        const lng = parseFloat(parts[1].replace(/,/g, '.').trim());
+        if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+    }
+    return null;
+}
+
 function getRealTime() {
     const now = new Date(); const pad = n => n.toString().padStart(2, '0');
     return { 
@@ -72,7 +103,6 @@ function getRealTime() {
     };
 }
 
-// CƠ CHẾ QUÉT MIDDLEWARE: Đuổi và xóa sạch phiên nếu tài khoản hết hạn/bị xóa trên Firebase
 function handleMiddlewareError(result) {
     if (result.isExpired) {
         alert("THÔNG BÁO HỆ THỐNG:\n" + result.error);
@@ -82,14 +112,11 @@ function handleMiddlewareError(result) {
     return false;
 }
 
-// Tự động phân tách nội suy chữ hiển thị Chẵn (Check-in) / Lẻ (Check-out)
 function updatePhotoTypeUI() {
     const display = document.getElementById('photoTypeDisplay');
     if (!display) return;
-    
     const typeNum = parseInt(nextPhotoType);
     const isCheckIn = typeNum % 2 === 0;
-    
     display.value = `${typeNum} - ${isCheckIn ? 'Check-in (Vào ca)' : 'Check-out (Ra ca)'}`;
 }
 
@@ -106,34 +133,63 @@ async function loadShops() {
             
             result.data.data.forEach(shop => {
                 const opt = document.createElement('option');
-                opt.value = JSON.stringify({ 
-                    id: shop.shopId, 
-                    code: shop.shopCode,
-                    lat: shop.latitude,
-                    lng: shop.longitude 
-                });
+                opt.value = JSON.stringify({ id: shop.shopId, code: shop.shopCode, lat: shop.latitude, lng: shop.longitude });
                 opt.innerText = `[${shop.shopCode}] ${shop.shopName}`;
                 select.appendChild(opt);
             });
 
-            // TỰ ĐỘNG ĐỒNG BỘ ĐIỀN TỌA ĐỘ GỐC CỦA SHOP KHI CÓ THAY ĐỔI LỰA CHỌN
             select.addEventListener('change', function() {
-                if(!this.value) {
-                    document.getElementById('lat').value = "";
-                    document.getElementById('lng').value = "";
-                    return;
-                }
-                const selectedData = JSON.parse(this.value);
-                if(selectedData.lat && selectedData.lng) {
-                    document.getElementById('lat').value = selectedData.lat;
-                    document.getElementById('lng').value = selectedData.lng;
-                }
+                document.getElementById('lat').value = "";
+                document.getElementById('lng').value = "";
+                document.getElementById('distanceDisplay').innerHTML = "Vừa đổi shop, vui lòng bấm nút <b style='color:#a50034;'>[Xoay vị trí]</b>";
             });
 
             printLog("Tải thành công danh sách Cửa hàng điều hành.");
         }
     } catch (e) { printLog("Không thể nạp danh sách cửa hàng."); }
 }
+
+// XỬ LÝ SỰ KIỆN NÚT XOAY VỊ TRÍ (RANDOM GPS VÀ TÍNH KHOẢNG CÁCH)
+document.getElementById('btnRandomGps').addEventListener('click', () => {
+    const shopSelect = document.getElementById('shopSelect');
+    if (!shopSelect.value) return alert("Vui lòng lựa chọn cửa hàng mục tiêu trước!");
+
+    const shopData = JSON.parse(shopSelect.value);
+    
+    // Quyết định điểm gốc (Nếu có dán điểm neo tùy chỉnh thì dùng điểm neo, ngược lại dùng tọa độ shop)
+    let baseLat = shopData.lat;
+    let baseLng = shopData.lng;
+    
+    const customAnchorVal = document.getElementById('customAnchorInput').value.trim();
+    if (customAnchorVal) {
+        const parsed = parseCoords(customAnchorVal);
+        if (parsed) {
+            baseLat = parsed.lat;
+            baseLng = parsed.lng;
+        } else {
+            return alert("Định dạng Điểm neo dán vào không hợp lệ!\nVui lòng nhập dạng chuỗi vĩ độ, kinh độ (VD: 21.2099, 106.0939)");
+        }
+    }
+
+    // Tiến hành xoay tạo nhiễu ngẫu nhiên trong bán kính hình tròn an toàn (max 45 mét)
+    const noisyGps = addGpsNoise(baseLat, baseLng, 45);
+    
+    // Khóa dữ liệu hiển thị cố định lên ô Input màn hình cho Tester kiểm tra duyệt qua
+    document.getElementById('lat').value = noisyGps.latitude;
+    document.getElementById('lng').value = noisyGps.longitude;
+
+    // Tính toán chênh lệch khoảng cách hình học so với cửa hàng gốc thực tế của LGE
+    const distance = getDistanceMeters(noisyGps.latitude, noisyGps.longitude, shopData.lat, shopData.lng);
+    const distDisplay = document.getElementById('distanceDisplay');
+    
+    if (distance > 150) {
+        distDisplay.innerHTML = `⚠️ Cách cửa hàng gốc: <span style="color:#dc3545; font-size:14px;">${distance.toFixed(1)} mét</span><br><b style="color:#dc3545;">(Nguy hiểm: Vượt mốc cho phép >150m của LGE)</b>`;
+    } else {
+        distDisplay.innerHTML = `✅ Cách cửa hàng gốc: <span style="color:#059669; font-size:14px;">${distance.toFixed(1)} mét</span><br><b style="color:#059669;">(Hợp lệ: Đã khóa vị trí an toàn &lt;150m)</b>`;
+    }
+    
+    printLog(`Đã xoay vị trí ngẫu nhiên. Khoảng cách lệch gốc: ${distance.toFixed(1)}m`);
+});
 
 async function loadHistory() {
     const today = new Date(); const pad = n => n.toString().padStart(2, '0');
@@ -149,7 +205,6 @@ async function loadHistory() {
 
         listDiv.innerHTML = "";
         if (result.success && result.data?.data?.length > 0) {
-            // TÌM PHẦN TỬ PHOTO_TYPE LỚN NHẤT ĐỂ TỰ ĐỘNG NỘI SUY PHOTO_TYPE TIẾP THEO
             let maxType = -1;
             result.data.data.forEach(item => {
                 const currentType = parseInt(item.photoType);
@@ -178,7 +233,7 @@ async function loadHistory() {
                     </div>`;
             });
         } else { 
-            nextPhotoType = "0"; // Reset về 0 (Check-in đầu ngày) nếu chưa có lịch sử
+            nextPhotoType = "0"; 
             updatePhotoTypeUI();
             listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color: #888;'>Chưa ghi nhận dữ liệu báo cáo nào hôm nay.</div>"; 
         }
@@ -191,8 +246,14 @@ if (btnSubmit) {
         const fileInput = document.getElementById('imageInput');
         const shopVal = document.getElementById('shopSelect').value;
 
-        if (!shopVal) { alert("Vui lòng lựa chọn Cửa hàng báo cáo trước!"); return; }
-        if (fileInput.files.length === 0) { alert("Vui lòng cung cấp hình ảnh báo cáo!"); return; }
+        if (!shopVal) return alert("Vui lòng lựa chọn Cửa hàng báo cáo trước!");
+        
+        // KIỂM TRA ĐIỀU KIỆN ĐÃ ẤN XOAY VỊ TRÍ CHƯA
+        const finalLatStr = document.getElementById('lat').value;
+        const finalLngStr = document.getElementById('lng').value;
+        if (!finalLatStr || !finalLngStr) return alert("Vui lòng nhấn nút [Xoay vị trí] để phê duyệt tọa độ trước khi gửi dữ liệu!");
+
+        if (fileInput.files.length === 0) return alert("Vui lòng cung cấp hình ảnh báo cáo!");
 
         const shopData = JSON.parse(shopVal);
         btnSubmit.disabled = true; btnSubmit.innerText = "⏳ ĐANG XỬ LÝ CANVAS (KHỬ EXIF)...";
@@ -203,7 +264,6 @@ if (btnSubmit) {
         reader.onload = function(e) {
             const img = new Image();
             img.onload = async function() {
-                // TIẾN HÀNH VẼ LẠI ẢNH QUA CANVAS ĐỂ LỘT BỎ TOÀN BỘ SIÊU DỮ LIỆU GỐC (EXIF/METADATA)
                 const canvas = document.createElement('canvas');
                 canvas.width = img.width; canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
@@ -211,38 +271,28 @@ if (btnSubmit) {
                 const cleanBase64Data = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
 
                 try {
-                    // Trích xuất tọa độ gốc của Cửa hàng từ giao diện
-                    const rawLat = parseFloat(document.getElementById('lat').value);
-                    const rawLng = parseFloat(document.getElementById('lng').value);
-                    
-                    // Trộn nhiễu GPS vòng tròn toán học ngẫu nhiên 1-45 mét cực kỳ an toàn
-                    const gps = addGpsNoise(rawLat, rawLng, 45);
-                    const finalLat = gps.latitude;
-                    const finalLng = gps.longitude;
+                    // LẤY ĐÚNG TỌA ĐỘ NGẪU NHIÊN MÀ USER ĐÃ XEM VÀ ĐỒNG Ý TRÊN MÀN HÌNH
+                    const finalLat = parseFloat(finalLatStr);
+                    const finalLng = parseFloat(finalLngStr);
 
                     const randAccuracy = 20 + Math.random() * 3; 
                     const fakePhotoName = crypto.randomUUID().toUpperCase() + ".jpg";
                     const realTime = getRealTime();
 
                     const payload = {
-                        "ShopId": shopData.id, 
-                        "ShopCode": shopData.code, 
-                        "PhotoName": fakePhotoName, 
-                        "Latitude": finalLat, 
-                        "Longitude": finalLng, 
-                        "Accuracy": randAccuracy,
-                        "ReportId": 1, 
-                        "PhotoTime": realTime.time, 
-                        "PhotoType": nextPhotoType, 
-                        "PhotoDate": realTime.date, 
-                        "guid": crypto.randomUUID(), 
-                        "PhotoData": cleanBase64Data, 
-                        "WorkStatus": 1,
+                        "ShopId": shopData.id, "ShopCode": shopData.code, "PhotoName": fakePhotoName, 
+                        "Latitude": finalLat, "Longitude": finalLng, "Accuracy": randAccuracy,
+                        "ReportId": 1, "PhotoTime": realTime.time, "PhotoType": nextPhotoType, "PhotoDate": realTime.date, 
+                        "guid": crypto.randomUUID(), "PhotoData": cleanBase64Data, "WorkStatus": 1,
                         "DataLocation": JSON.stringify({
                             latitude: finalLat, longitude: finalLng, accuracy: randAccuracy,
                             isFast: false, usedHighAccuracy: true, isLikelyPreciseFix: true
                         })
                     };
+
+                    // NÂNG CẤP BẢO MẬT: Lưu trữ lại điểm neo tùy chỉnh vào máy người dùng trước khi gửi đi thành công
+                    const currentAnchorVal = document.getElementById('customAnchorInput').value.trim();
+                    localStorage.setItem('lge_custom_anchor', currentAnchorVal);
 
                     printLog("Đang mã hóa & đẩy gói dữ liệu sang LGE...");
                     const response = await fetch('/proxy-upload', {
@@ -256,7 +306,6 @@ if (btnSubmit) {
                     if (response.ok && result.success) {
                         printLog(`[THÀNH CÔNG] Dữ liệu chấm công đã được ghi nhận.`);
                         fileInput.value = ""; document.getElementById('fileNameDisplay').innerHTML = "";
-                        // Tự động chuyển tab sau 1.5 giây để hệ thống máy chủ LGE render kịp ảnh
                         setTimeout(() => {
                             loadHistory();
                             const historyTabNav = document.querySelectorAll('.nav-item')[1]; 

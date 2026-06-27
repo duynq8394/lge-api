@@ -1,6 +1,7 @@
 const API_BASE = "https://lge-api.sucbat.com.vn";
 let token = "";
 let reqUser = "";
+let nextPhotoType = "0"; // Lưu trữ loại báo cáo tự động tính toán tiếp theo
 
 document.addEventListener('DOMContentLoaded', () => {
     token = localStorage.getItem('lge_token');
@@ -13,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nameDisplay = document.getElementById('empNameDisplay');
     if(nameDisplay) {
         let displayName = empName;
-        if (expireText) displayName += ` (Hạn: ${expireText})`;
+        if (expireText) displayName += ` (${expireText})`;
         nameDisplay.innerText = displayName;
     }
 
@@ -49,7 +50,20 @@ function printLog(msg) {
     logBox.scrollTop = logBox.scrollHeight;
 }
 
-function addGpsJitter(coord) { return coord + ((Math.random() - 0.5) * 0.00004); }
+// THUẬT TOÁN ĐỘ NHIỄU GPS HÌNH TRÒN PHÂN BỐ ĐỀU (BÁN KÍNH 1m - 45m AN TOÀN TUYỆT ĐỐI)
+function addGpsNoise(lat, lng, maxMeters = 45) {
+    const r = 1 + Math.random() * (maxMeters - 1); 
+    const theta = Math.random() * 2 * Math.PI; 
+
+    const dLat = (r * Math.cos(theta)) / 111320;
+    const dLng = (r * Math.sin(theta)) / (111320 * Math.cos(lat * Math.PI / 180));
+
+    return {
+        latitude: lat + dLat,
+        longitude: lng + dLng
+    };
+}
+
 function getRealTime() {
     const now = new Date(); const pad = n => n.toString().padStart(2, '0');
     return { 
@@ -58,14 +72,25 @@ function getRealTime() {
     };
 }
 
-// Xử lý lỗi từ server, nếu isExpired thì đá văng ra ngoài
+// CƠ CHẾ QUÉT MIDDLEWARE: Đuổi và xóa sạch phiên nếu tài khoản hết hạn/bị xóa trên Firebase
 function handleMiddlewareError(result) {
     if (result.isExpired) {
-        alert(result.error);
+        alert("THÔNG BÁO HỆ THỐNG:\n" + result.error);
         logout();
         return true;
     }
     return false;
+}
+
+// Tự động phân tách nội suy chữ hiển thị Chẵn (Check-in) / Lẻ (Check-out)
+function updatePhotoTypeUI() {
+    const display = document.getElementById('photoTypeDisplay');
+    if (!display) return;
+    
+    const typeNum = parseInt(nextPhotoType);
+    const isCheckIn = typeNum % 2 === 0;
+    
+    display.value = `${typeNum} - ${isCheckIn ? 'Check-in (Vào ca)' : 'Check-out (Ra ca)'}`;
 }
 
 async function loadShops() {
@@ -77,16 +102,37 @@ async function loadShops() {
         if (result.success && result.data?.data) {
             const select = document.getElementById('shopSelect');
             if(!select) return;
-            select.innerHTML = ""; 
+            select.innerHTML = "<option value=''>-- Chạm vào để chọn Cửa hàng --</option>"; 
+            
             result.data.data.forEach(shop => {
                 const opt = document.createElement('option');
-                opt.value = JSON.stringify({ id: shop.shopId, code: shop.shopCode });
+                opt.value = JSON.stringify({ 
+                    id: shop.shopId, 
+                    code: shop.shopCode,
+                    lat: shop.latitude,
+                    lng: shop.longitude 
+                });
                 opt.innerText = `[${shop.shopCode}] ${shop.shopName}`;
                 select.appendChild(opt);
             });
-            printLog("Tải danh sách cửa hàng thành công.");
+
+            // TỰ ĐỘNG ĐỒNG BỘ ĐIỀN TỌA ĐỘ GỐC CỦA SHOP KHI CÓ THAY ĐỔI LỰA CHỌN
+            select.addEventListener('change', function() {
+                if(!this.value) {
+                    document.getElementById('lat').value = "";
+                    document.getElementById('lng').value = "";
+                    return;
+                }
+                const selectedData = JSON.parse(this.value);
+                if(selectedData.lat && selectedData.lng) {
+                    document.getElementById('lat').value = selectedData.lat;
+                    document.getElementById('lng').value = selectedData.lng;
+                }
+            });
+
+            printLog("Tải thành công danh sách Cửa hàng điều hành.");
         }
-    } catch (e) { printLog("Lỗi mạng khi tải cửa hàng."); }
+    } catch (e) { printLog("Không thể nạp danh sách cửa hàng."); }
 }
 
 async function loadHistory() {
@@ -94,7 +140,7 @@ async function loadHistory() {
     const dateStr = `${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}`;
     const listDiv = document.getElementById('historyList');
     if(!listDiv) return;
-    listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color: #666;'>⏳ Đang tải dữ liệu...</div>";
+    listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color: #666;'>⏳ Đang đồng bộ nhật ký...</div>";
 
     try {
         const res = await fetch('/proxy-get-history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, request_user: reqUser, date: dateStr }) });
@@ -103,9 +149,21 @@ async function loadHistory() {
 
         listDiv.innerHTML = "";
         if (result.success && result.data?.data?.length > 0) {
+            // TÌM PHẦN TỬ PHOTO_TYPE LỚN NHẤT ĐỂ TỰ ĐỘNG NỘI SUY PHOTO_TYPE TIẾP THEO
+            let maxType = -1;
+            result.data.data.forEach(item => {
+                const currentType = parseInt(item.photoType);
+                if (!isNaN(currentType) && currentType > maxType) maxType = currentType;
+            });
+            nextPhotoType = (maxType + 1).toString();
+            updatePhotoTypeUI();
+
             const historyData = result.data.data.reverse(); 
             historyData.forEach(item => {
-                let typeName = `Check-in/out lần ${parseInt(item.photoType) + 1}`;
+                const typeNum = parseInt(item.photoType);
+                const isCheckIn = typeNum % 2 === 0;
+                let typeName = `${isCheckIn ? 'Check-in' : 'Check-out'} lần ${Math.floor(typeNum / 2) + 1}`;
+                
                 let imgUrl = API_BASE + item.photoPath;
                 let timeOnly = item.photoFullTime.split(' ')[1] || item.photoFullTime;
                 listDiv.innerHTML += `
@@ -113,14 +171,18 @@ async function loadHistory() {
                         <img src="${imgUrl}" alt="Photo" onerror="this.src='https://via.placeholder.com/80?text=No+Image'">
                         <div class="history-info">
                             <span class="badge">${typeName}</span><br>
-                            <b>🕒 Giờ:</b> ${timeOnly}<br>
-                            <b>📍 GPS:</b> ${item.latitude.toFixed(5)}, ${item.longitude.toFixed(5)}<br>
-                            <b>🎯 Sai số:</b> ${item.accuracy.toFixed(1)}m
+                            <b>🕒 Thời gian:</b> ${timeOnly}<br>
+                            <b>📍 Tọa độ GPS:</b> ${item.latitude.toFixed(6)}, ${item.longitude.toFixed(6)}<br>
+                            <b>🎯 Độ chính xác:</b> ${item.accuracy.toFixed(1)}m
                         </div>
                     </div>`;
             });
-        } else { listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color: #888;'>Chưa có báo cáo hôm nay.</div>"; }
-    } catch (e) { listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color:#dc3545;'>Lỗi tải lịch sử!</div>"; }
+        } else { 
+            nextPhotoType = "0"; // Reset về 0 (Check-in đầu ngày) nếu chưa có lịch sử
+            updatePhotoTypeUI();
+            listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color: #888;'>Chưa ghi nhận dữ liệu báo cáo nào hôm nay.</div>"; 
+        }
+    } catch (e) { listDiv.innerHTML = "<div style='text-align:center; padding: 20px; color:#dc3545;'>Lỗi đồng bộ nhật ký từ LGE!</div>"; }
 }
 
 const btnSubmit = document.getElementById('btnSubmit');
@@ -129,11 +191,11 @@ if (btnSubmit) {
         const fileInput = document.getElementById('imageInput');
         const shopVal = document.getElementById('shopSelect').value;
 
-        if (!shopVal) { alert("Vui lòng đợi tải cửa hàng!"); return; }
-        if (fileInput.files.length === 0) { alert("Bạn chưa chọn ảnh!"); return; }
+        if (!shopVal) { alert("Vui lòng lựa chọn Cửa hàng báo cáo trước!"); return; }
+        if (fileInput.files.length === 0) { alert("Vui lòng cung cấp hình ảnh báo cáo!"); return; }
 
         const shopData = JSON.parse(shopVal);
-        btnSubmit.disabled = true; btnSubmit.innerText = "⏳ ĐANG XỬ LÝ ẢNH...";
+        btnSubmit.disabled = true; btnSubmit.innerText = "⏳ ĐANG XỬ LÝ CANVAS (KHỬ EXIF)...";
 
         const file = fileInput.files[0];
         const reader = new FileReader();
@@ -141,7 +203,7 @@ if (btnSubmit) {
         reader.onload = function(e) {
             const img = new Image();
             img.onload = async function() {
-                // XÓA EXIF METADATA QUA CANVAS
+                // TIẾN HÀNH VẼ LẠI ẢNH QUA CANVAS ĐỂ LỘT BỎ TOÀN BỘ SIÊU DỮ LIỆU GỐC (EXIF/METADATA)
                 const canvas = document.createElement('canvas');
                 canvas.width = img.width; canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
@@ -149,24 +211,40 @@ if (btnSubmit) {
                 const cleanBase64Data = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
 
                 try {
-                    const finalLat = addGpsJitter(parseFloat(document.getElementById('lat').value));
-                    const finalLng = addGpsJitter(parseFloat(document.getElementById('lng').value));
+                    // Trích xuất tọa độ gốc của Cửa hàng từ giao diện
+                    const rawLat = parseFloat(document.getElementById('lat').value);
+                    const rawLng = parseFloat(document.getElementById('lng').value);
+                    
+                    // Trộn nhiễu GPS vòng tròn toán học ngẫu nhiên 1-45 mét cực kỳ an toàn
+                    const gps = addGpsNoise(rawLat, rawLng, 45);
+                    const finalLat = gps.latitude;
+                    const finalLng = gps.longitude;
+
                     const randAccuracy = 20 + Math.random() * 3; 
                     const fakePhotoName = crypto.randomUUID().toUpperCase() + ".jpg";
                     const realTime = getRealTime();
 
                     const payload = {
-                        "ShopId": shopData.id, "ShopCode": shopData.code, "PhotoName": fakePhotoName, 
-                        "Latitude": finalLat, "Longitude": finalLng, "Accuracy": randAccuracy,
-                        "ReportId": 1, "PhotoTime": realTime.time, "PhotoType": "1", "PhotoDate": realTime.date, 
-                        "guid": crypto.randomUUID(), "PhotoData": cleanBase64Data, "WorkStatus": 1,
+                        "ShopId": shopData.id, 
+                        "ShopCode": shopData.code, 
+                        "PhotoName": fakePhotoName, 
+                        "Latitude": finalLat, 
+                        "Longitude": finalLng, 
+                        "Accuracy": randAccuracy,
+                        "ReportId": 1, 
+                        "PhotoTime": realTime.time, 
+                        "PhotoType": nextPhotoType, 
+                        "PhotoDate": realTime.date, 
+                        "guid": crypto.randomUUID(), 
+                        "PhotoData": cleanBase64Data, 
+                        "WorkStatus": 1,
                         "DataLocation": JSON.stringify({
                             latitude: finalLat, longitude: finalLng, accuracy: randAccuracy,
                             isFast: false, usedHighAccuracy: true, isLikelyPreciseFix: true
                         })
                     };
 
-                    printLog("Đang đẩy dữ liệu lên máy chủ...");
+                    printLog("Đang mã hóa & đẩy gói dữ liệu sang LGE...");
                     const response = await fetch('/proxy-upload', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ token: token, request_user: reqUser, payload: payload })
@@ -176,18 +254,19 @@ if (btnSubmit) {
                     if(handleMiddlewareError(result)) return;
 
                     if (response.ok && result.success) {
-                        printLog(`[THÀNH CÔNG] Dữ liệu đã được ghi nhận.`);
+                        printLog(`[THÀNH CÔNG] Dữ liệu chấm công đã được ghi nhận.`);
                         fileInput.value = ""; document.getElementById('fileNameDisplay').innerHTML = "";
+                        // Tự động chuyển tab sau 1.5 giây để hệ thống máy chủ LGE render kịp ảnh
                         setTimeout(() => {
                             loadHistory();
                             const historyTabNav = document.querySelectorAll('.nav-item')[1]; 
                             if(historyTabNav) switchTab('tab-history', historyTabNav);
                         }, 1500); 
                     } else {
-                        printLog(`[THẤT BẠI] Lỗi: ${JSON.stringify(result.error)}`);
+                        printLog(`[THẤT BẠI] Máy chủ từ chối: ${JSON.stringify(result.error)}`);
                     }
-                } catch (error) { printLog(`[LỖI MẠNG] ${error.message}`); } 
-                finally { btnSubmit.disabled = false; btnSubmit.innerText = "🚀 GỬI BÁO CÁO"; }
+                } catch (error) { printLog(`[LỖI MẠNG] Không thể kết nối cổng proxy: ${error.message}`); } 
+                finally { btnSubmit.disabled = false; btnSubmit.innerText = "🚀 GỬI DỮ LIỆU LÊN MÁY CHỦ"; }
             };
             img.src = e.target.result; 
         };

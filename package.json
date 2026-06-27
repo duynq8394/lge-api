@@ -1,7 +1,7 @@
 {
   "name": "lge-webapp-beta",
   "version": "1.0.0",
-  "description": "Proxy Upload System LGE - Mobile Version",
+  "description": "Proxy System LGE - Mobile WebApp Version",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -12,4 +12,4 @@
     "express": "^4.19.2",
     "firebase-admin": "^12.0.0"
   }
-}
+} 

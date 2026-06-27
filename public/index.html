@@ -11,8 +11,8 @@
         <div class="user-info">
             <span class="avatar">👤</span>
             <div>
-                <div style="font-size: 11px; opacity: 0.8;">Xin chào,</div>
-                <div class="user-name" id="empNameDisplay">Đang tải...</div>
+                <div style="font-size: 11px; opacity: 0.8;">Nhân viên kiểm thử:</div>
+                <div class="user-name" id="empNameDisplay">Đang đồng bộ...</div>
             </div>
         </div>
         <button class="btn-logout" onclick="logout()">Đăng xuất</button>
@@ -21,36 +21,40 @@
     <main class="app-body">
         <div id="tab-upload" class="tab-pane active">
             <div class="card">
-                <div class="card-title">📍 Thông tin Check-in</div>
+                <div class="card-title">📍 Vị trí & Cửa hàng chấm công</div>
                 <div class="form-group">
-                    <label>Cửa hàng / Shop:</label>
-                    <select id="shopSelect" class="form-control"><option value="">Đang tải dữ liệu...</option></select>
+                    <label>Chọn cửa hàng mục tiêu:</label>
+                    <select id="shopSelect" class="form-control"><option value="">Đang tải danh sách từ LGE...</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Loại báo cáo hiện tại (Hệ thống tự động nội suy):</label>
+                    <input type="text" id="photoTypeDisplay" class="form-control" value="⏳ Đang phân tích lịch sử..." disabled style="background: #fff5f7; font-weight: bold; color: #a50034; border: 1px solid #f5b3c3;">
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label>Vĩ độ (Lat):</label><input type="number" step="any" id="lat" class="form-control" value="21.17003169232964"></div>
-                    <div class="form-group"><label>Kinh độ (Lng):</label><input type="number" step="any" id="lng" class="form-control" value="106.05863329637819"></div>
+                    <div class="form-group"><label>Vĩ độ gốc (Lat):</label><input type="number" step="any" id="lat" class="form-control" readonly style="background:#e9ecef; color:#6c757d;"></div>
+                    <div class="form-group"><label>Kinh độ gốc (Lng):</label><input type="number" step="any" id="lng" class="form-control" readonly style="background:#e9ecef; color:#6c757d;"></div>
                 </div>
             </div>
 
             <div class="card">
-                <div class="card-title">📸 Hình ảnh báo cáo</div>
+                <div class="card-title">📸 File ảnh báo cáo (Đã tự khử trùng EXIF)</div>
                 <div class="form-group">
                     <label class="file-upload-box" for="imageInput">
-                        <div style="font-size: 24px; margin-bottom: 5px;">📷</div>
-                        <div>Chạm để chọn ảnh từ thư viện</div>
+                        <div style="font-size: 26px; margin-bottom: 5px;">📷</div>
+                        <div>Bấm vào đây để chọn tệp hình ảnh</div>
                     </label>
                     <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg" style="display: none;">
                     <div id="fileNameDisplay" style="text-align: center; margin-top: 10px; font-size: 12px; color: #a50034; font-weight: bold;"></div>
                 </div>
-                <button id="btnSubmit" class="btn-primary">🚀 GỬI BÁO CÁO</button>
+                <button id="btnSubmit" class="btn-primary">🚀 GỬI DỮ LIỆU LÊN MÁY CHỦ</button>
             </div>
-            <div class="log-terminal" id="logBox">Hệ thống sẵn sàng...</div>
+            <div class="log-terminal" id="logBox">Hệ thống đang chạy môi trường Sandbox...</div>
         </div>
 
         <div id="tab-history" class="tab-pane">
             <div class="history-header">
-                <h3>Lịch sử hôm nay</h3>
-                <button onclick="loadHistory()" class="btn-refresh">🔄 Làm mới</button>
+                <h3>Nhật ký làm việc hôm nay</h3>
+                <button onclick="loadHistory()" class="btn-refresh">🔄 Tải lại</button>
             </div>
             <div id="historyList" class="history-list"></div>
         </div>

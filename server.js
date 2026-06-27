@@ -4,6 +4,7 @@ const axios = require('axios');
 const path = require('path');
 const admin = require('firebase-admin');
 
+// Đọc file key cấu hình từ Render Secret Files hoặc thư mục gốc tại local
 const serviceAccountPath = process.env.FIREBASE_KEY_PATH || './firebase-key.json';
 const serviceAccount = require(serviceAccountPath);
 
@@ -30,10 +31,10 @@ const getBaseHeaders = (token) => ({
 });
 
 // ==========================================
-// 1. API PROXY (LGE APP)
+// 1. LUỒNG APPS PROXY (CHO QA/TESTER TRÊN ĐIỆN THOẠI)
 // ==========================================
 
-// API Đăng nhập
+// API Đăng nhập kết hợp kiểm tra Whitelist không phân biệt hoa thường
 app.post('/proxy-login', async (req, res) => {
     const { payload } = req.body;
     const requestUser = payload.username.trim().toLowerCase();
@@ -41,7 +42,7 @@ app.post('/proxy-login', async (req, res) => {
     try {
         const testerDoc = await db.collection('testers').doc(requestUser).get();
         if (!testerDoc.exists) {
-            return res.status(403).json({ success: false, error: "Tài khoản chưa được cấp quyền truy cập!" });
+            return res.status(403).json({ success: false, error: "Tài khoản của bạn chưa được cấp quyền thử nghiệm!" });
         }
 
         const userData = testerDoc.data();
@@ -50,7 +51,7 @@ app.post('/proxy-login', async (req, res) => {
         if (userData.expiresAt) {
             const now = new Date().getTime();
             if (now > userData.expiresAt) {
-                return res.status(403).json({ success: false, error: "Tài khoản của bạn đã hết hạn sử dụng. Vui lòng liên hệ Admin gia hạn!" });
+                return res.status(403).json({ success: false, error: "Tài khoản thử nghiệm của bạn đã hết hạn sử dụng!" });
             }
             const daysLeft = Math.ceil((userData.expiresAt - now) / (1000 * 60 * 60 * 24));
             expireText = `còn ${daysLeft} ngày`;
@@ -63,24 +64,24 @@ app.post('/proxy-login', async (req, res) => {
     }
 });
 
-// MIDDLEWARE KIỂM TRA HẠN MỌI LÚC MỌI NƠI
+// MIDDLEWARE KIỂM TRA HẠN SỬ DỤNG MỌI LÚC MỌI NƠI (CHỐNG TREO TOKEN)
 const checkTesterAccess = async (req, res, next) => {
     const { request_user } = req.body;
-    if (!request_user) return res.status(403).json({ success: false, error: "Lỗi định danh", isExpired: true });
+    if (!request_user) return res.status(403).json({ success: false, error: "Lỗi xác thực danh tính Tester.", isExpired: true });
 
     try {
         const testerDoc = await db.collection('testers').doc(request_user.trim().toLowerCase()).get();
         if (!testerDoc.exists) {
-            return res.status(403).json({ success: false, error: "Tài khoản đã bị xóa khỏi hệ thống.", isExpired: true });
+            return res.status(403).json({ success: false, error: "Tài khoản của bạn đã bị gỡ quyền truy cập nội bộ.", isExpired: true });
         }
 
         const userData = testerDoc.data();
         if (userData.expiresAt && new Date().getTime() > userData.expiresAt) {
-            return res.status(403).json({ success: false, error: "Tài khoản của bạn đã hết hạn truy cập.", isExpired: true });
+            return res.status(403).json({ success: false, error: "Tài khoản của bạn đã hết hạn truy cập hệ thống.", isExpired: true });
         }
         next();
     } catch (error) {
-        return res.status(500).json({ success: false, error: "Lỗi kiểm tra dữ liệu." });
+        return res.status(500).json({ success: false, error: "Hệ thống kiểm tra Whitelist gặp sự cố." });
     }
 };
 
@@ -101,14 +102,15 @@ app.post('/proxy-get-shops', checkTesterAccess, async (req, res) => {
 app.post('/proxy-get-history', checkTesterAccess, async (req, res) => {
     try {
         const customHeaders = getBaseHeaders(req.body.token);
-        customHeaders['shopid'] = '0'; customHeaders['attendantdate'] = req.body.date; 
+        customHeaders['shopid'] = '0'; 
+        customHeaders['attendantdate'] = req.body.date; 
         const response = await axios.get('https://lge-api.sucbat.com.vn/attendants/byshop', { headers: customHeaders });
         res.status(response.status).json({ success: true, data: response.data });
     } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
 });
 
 // ==========================================
-// 2. API QUẢN TRỊ VIÊN
+// 2. CÁC API DÀNH RIÊNG CHO TRANG ADMIN (.HTML)
 // ==========================================
 const verifyAdmin = async (req, res, next) => {
     const { admin_pass } = req.headers;
@@ -145,7 +147,7 @@ app.post('/admin/testers', verifyAdmin, async (req, res) => {
             note: note || "",
             expiresAt: expiresAt
         });
-        res.json({ success: true, message: `Đã cấp quyền cho ${normalizedUsername}` });
+        res.json({ success: true, message: `Đã cấp quyền thành công cho ${normalizedUsername}` });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -153,8 +155,8 @@ app.delete('/admin/testers/:username', verifyAdmin, async (req, res) => {
     try {
         const normalizedUsername = req.params.username.trim().toLowerCase();
         await db.collection('testers').doc(normalizedUsername).delete();
-        res.json({ success: true, message: "Đã thu hồi quyền." });
+        res.json({ success: true, message: "Đã thu hồi quyền truy cập thành công." });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-app.listen(PORT, () => console.log(`[SYSTEM] Máy chủ khởi chạy tại Port ${PORT}`));
+app.listen(PORT, () => console.log(`[SYSTEM] Máy chủ WebApp LGE chạy ổn định tại Port ${PORT}`));

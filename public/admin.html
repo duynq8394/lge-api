@@ -23,31 +23,31 @@
 </head>
 <body>
 <div class="container">
-    <h2>⚙️ ADMIN PANEL - WHITELIST</h2>
+    <h2>⚙️ LGE ADMIN PANEL - QUẢN LÝ WHITELIST</h2>
     
     <div class="login-section" id="loginSection">
-        <p style="margin-bottom: 20px;">Nhập mật khẩu Master để quản lý:</p>
+        <p style="margin-bottom: 20px;">Nhập mật khẩu Master Admin để quản lý danh sách Tester:</p>
         <input type="password" id="adminPass" placeholder="Mật khẩu Admin..." onkeyup="if(event.keyCode==13) loginAdmin()">
         <button onclick="loginAdmin()">Vào hệ thống</button>
     </div>
 
     <div class="dashboard-section" id="dashboardSection">
         <div class="add-box">
-            <input type="text" id="newUsername" placeholder="Mã NV (Tên Đăng Nhập)..." style="width: 180px;">
-            <input type="text" id="newNote" placeholder="Tên / Ghi chú..." style="width: 180px;">
+            <input type="text" id="newUsername" placeholder="Tên Đăng Nhập / Mã NV..." style="width: 180px;">
+            <input type="text" id="newNote" placeholder="Tên Tester / Ghi chú..." style="width: 180px;">
             <select id="durationSelect" onchange="toggleCustomDays()">
-                <option value="30">30 Ngày</option>
-                <option value="60">60 Ngày</option>
-                <option value="90">90 Ngày</option>
+                <option value="30">Gói 30 Ngày</option>
+                <option value="60">Gói 60 Ngày</option>
+                <option value="90">Gói 90 Ngày</option>
                 <option value="permanent">Vĩnh viễn</option>
-                <option value="custom">Tự nhập số ngày...</option>
+                <option value="custom">Tự điền số ngày...</option>
             </select>
             <input type="number" id="customDays" placeholder="Số ngày..." style="display:none; width: 100px;">
             <button onclick="addTester()" style="background: #28a745;">+ Cấp quyền</button>
             <button onclick="loadTesters()" style="background: #6c757d;">🔄 Làm mới</button>
         </div>
         <table>
-            <thead><tr><th>Tài khoản</th><th>Ghi chú</th><th>Ngày tạo</th><th>Hết hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th>Tài khoản Whitelist</th><th>Ghi chú</th><th>Ngày cấp quyền</th><th>Hạn sử dụng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
             <tbody id="testersTableBody"></tbody>
         </table>
     </div>
@@ -80,7 +80,7 @@
             result.data.forEach(user => {
                 const addedStr = new Date(user.addedAt).toLocaleDateString('vi-VN');
                 let expireStr = "Vĩnh viễn";
-                let statusBadge = `<span class="badge-active">Hoạt động</span>`;
+                let statusBadge = `<span class="badge-active">Đang chạy</span>`;
                 if (user.expiresAt) {
                     expireStr = new Date(user.expiresAt).toLocaleDateString('vi-VN');
                     if (now > user.expiresAt) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
@@ -92,7 +92,7 @@
                         <td>${addedStr}</td>
                         <td><b>${expireStr}</b></td>
                         <td>${statusBadge}</td>
-                        <td><button class="btn-danger" onclick="removeTester('${user.username}')">Xóa</button></td>
+                        <td><button class="btn-danger" onclick="removeTester('${user.username}')">Xóa quyền</button></td>
                     </tr>
                 `;
             });
@@ -103,11 +103,11 @@
         const username = document.getElementById('newUsername').value.trim();
         const note = document.getElementById('newNote').value.trim();
         let duration = document.getElementById('durationSelect').value;
-        if(!username) return alert("Vui lòng nhập Username");
+        if(!username) return alert("Vui lòng nhập tên tài khoản");
         
         if (duration === 'custom') {
             duration = document.getElementById('customDays').value;
-            if (!duration || duration <= 0) return alert("Số ngày không hợp lệ!");
+            if (!duration || duration <= 0) return alert("Vui lòng điền số ngày hợp lệ!");
         }
 
         const res = await fetch('/admin/testers', {
@@ -117,12 +117,13 @@
         const result = await res.json();
         if(result.success) {
             document.getElementById('newUsername').value = ''; document.getElementById('newNote').value = '';
+            document.getElementById('customDays').value = '';
             loadTesters();
         } else { alert(result.error); }
     }
 
     async function removeTester(username) {
-        if(!confirm(`Xóa quyền đăng nhập của: ${username}?`)) return;
+        if(!confirm(`Bạn chắc chắn muốn hủy kích hoạt Whitelist của: ${username}?`)) return;
         const res = await fetch(`/admin/testers/${username}`, { method: 'DELETE', headers: { 'admin_pass': adminPassword } });
         if((await res.json()).success) loadTesters();
     }

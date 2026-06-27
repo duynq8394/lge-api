@@ -29,22 +29,22 @@
     <div class="login-card">
         <div class="logo-area">
             <h1>LGE FIELD FORCE</h1>
-            <p>Phiên bản WebApp Beta</p>
+            <p>Môi trường WebApp Beta Test</p>
         </div>
         <div id="msgBox"></div>
         <div class="input-group">
-            <label>Tài khoản / Username</label>
-            <input type="text" id="username" placeholder="Nhập mã nhân viên...">
+            <label>Tài khoản đăng nhập / Username</label>
+            <input type="text" id="username" placeholder="Nhập tài khoản của bạn...">
         </div>
         <div class="input-group">
             <label>Mật khẩu / Password</label>
             <input type="password" id="password" placeholder="Nhập mật khẩu..." onkeyup="if(event.keyCode==13) processLogin()">
         </div>
         <div class="options">
-            <label class="checkbox-label"><input type="checkbox" id="rememberMe"> Nhớ tài khoản</label>
+            <label class="checkbox-label"><input type="checkbox" id="rememberMe"> Nhớ tài khoản mật khẩu</label>
         </div>
         <button class="btn-login" id="btnLogin" onclick="processLogin()">ĐĂNG NHẬP</button>
-        <div class="footer-text">Chỉ dành cho tài khoản nội bộ (Whitelist)</div>
+        <div class="footer-text">Hệ thống giới hạn bảo mật Whitelist Tester</div>
     </div>
 
     <script>
@@ -68,10 +68,10 @@
             const msgBox = document.getElementById('msgBox');
             const btn = document.getElementById('btnLogin');
 
-            if (!user || !pass) { msgBox.style.color = '#dc3545'; msgBox.innerText = 'Vui lòng nhập đầy đủ!'; return; }
-            btn.disabled = true; btn.innerText = "ĐANG XÁC THỰC..."; msgBox.innerText = "";
+            if (!user || !pass) { msgBox.style.color = '#dc3545'; msgBox.innerText = 'Vui lòng điền đủ thông tin!'; return; }
+            btn.disabled = true; btn.innerText = "XÁC THỰC WHITE-LIST..."; msgBox.innerText = "";
 
-            const payload = { "username": user, "password": pass, "client_time": getClientTime(), "DeviceToken": "emMYBh-1sUq9...", "Platform": "ios", "IMEI": crypto.randomUUID().toUpperCase(), "AppId": "20H343", "versionid": "39" };
+            const payload = { "username": user, "password": pass, "client_time": getClientTime(), "DeviceToken": "emMYBh-1sUq9shk3XNGqQL:APA91bE8HYJwBXwjJv59xcIEPmwPlpngzmMoPVG6J2h7tKEwdyy8tJdBbJ49eD9zyWql6iK_C_3tx9G1NA5AlMyXcXXzNJmeV0Ue5QnIl8veQo7XwtIyExA", "Platform": "ios", "IMEI": crypto.randomUUID().toUpperCase(), "AppId": "20H343", "versionid": "39" };
 
             try {
                 const response = await fetch('/proxy-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payload: payload }) });
@@ -88,12 +88,12 @@
                     localStorage.setItem('lge_expire_text', result.expireText);
                     localStorage.setItem('lge_username', user.toLowerCase());
                     
-                    msgBox.style.color = "#059669"; msgBox.innerText = "Đăng nhập thành công!";
+                    msgBox.style.color = "#059669"; msgBox.innerText = "Xác thực thành công! Đang chuyển hướng...";
                     setTimeout(() => { window.location.href = 'index.html'; }, 1000);
                 } else {
-                    msgBox.style.color = "#dc3545"; msgBox.innerText = result.error || "Sai thông tin đăng nhập!";
+                    msgBox.style.color = "#dc3545"; msgBox.innerText = result.error || "Thông tin xác thực không đúng!";
                 }
-            } catch (error) { msgBox.style.color = "#dc3545"; msgBox.innerText = "Lỗi kết nối máy chủ!"; } 
+            } catch (error) { msgBox.style.color = "#dc3545"; msgBox.innerText = "Không thể kết nối đến máy chủ Proxy!"; } 
             finally { btn.disabled = false; btn.innerText = "ĐĂNG NHẬP"; }
         }
     </script>

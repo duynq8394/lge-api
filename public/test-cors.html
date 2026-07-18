@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Direct API</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        button { padding: 10px 15px; margin: 5px 0; }
+        pre { background: #111; color: #0f0; padding: 15px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+<h2>🔍 Test Gọi Trực Tiếp API (Không Qua Proxy)</h2>
+
+<button onclick="testGet()">Test GET Shops</button>
+<button onclick="testLogin()">Test Login</button>
+
+<pre id="output">Chưa test...</pre>
+
+<script>
+
+const API_BASE = "https://lge-api.sucbat.com.vn";
+
+function log(msg) {
+    document.getElementById("output").textContent = msg;
+}
+
+async function testGet() {
+    log("Đang test GET trực tiếp...");
+
+    try {
+        const res = await fetch(API_BASE + "/shops/storemaintant", {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+
+        const text = await res.text();
+        log("✅ Thành công\nStatus: " + res.status + "\n\nResponse:\n" + text);
+    }
+    catch (err) {
+        log("❌ Lỗi:\n" + err);
+    }
+}
+
+async function testLogin() {
+    log("Đang test POST login trực tiếp...");
+
+    const payload = {
+        username: "test",
+        password: "test"
+    };
+
+    try {
+        const res = await fetch(API_BASE + "/users/login/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const text = await res.text();
+        log("✅ Thành công\nStatus: " + res.status + "\n\nResponse:\n" + text);
+    }
+    catch (err) {
+        log("❌ Lỗi:\n" + err);
+    }
+}
+
+</script>
+
+</body>
+</html>

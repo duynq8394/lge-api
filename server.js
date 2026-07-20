@@ -4,6 +4,7 @@ const axios = require('axios');
 const path = require('path');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+
 const serviceAccountPath = process.env.FIREBASE_KEY_PATH || './firebase-key.json';
 const serviceAccount = require(serviceAccountPath);
 
@@ -30,7 +31,7 @@ const getBaseHeaders = (token) => ({
 });
 
 // ==========================================
-// PROXY LOGIN + DEVICE IDENTITY STABLE
+// PROXY LOGIN + DEVICE STABLE
 // ==========================================
 app.post('/proxy-login', async (req, res) => {
     const { payload } = req.body;
@@ -54,9 +55,6 @@ app.post('/proxy-login', async (req, res) => {
             expireText = `còn ${daysLeft} ngày`;
         }
 
-        // ===============================
-        // DEVICE IDENTITY STABLE LAYER
-        // ===============================
         const deviceRef = db.collection('devices').doc(requestUser);
         const deviceDoc = await deviceRef.get();
 
@@ -119,11 +117,7 @@ const checkTesterAccess = async (req, res, next) => {
 // ================== PROXY APIs ==================
 app.post('/proxy-upload', checkTesterAccess, async (req, res) => {
     try {
-        const response = await axios.post(
-            'https://lge-api.sucbat.com.vn/attendants/upload',
-            req.body.payload,
-            { headers: getBaseHeaders(req.body.token) }
-        );
+        const response = await axios.post('https://lge-api.sucbat.com.vn/attendants/upload', req.body.payload, { headers: getBaseHeaders(req.body.token) });
         res.status(response.status).json({ success: true, data: response.data });
     } catch (error) {
         res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
@@ -132,10 +126,7 @@ app.post('/proxy-upload', checkTesterAccess, async (req, res) => {
 
 app.post('/proxy-get-shops', checkTesterAccess, async (req, res) => {
     try {
-        const response = await axios.get(
-            'https://lge-api.sucbat.com.vn/shops/storemaintant',
-            { headers: getBaseHeaders(req.body.token) }
-        );
+        const response = await axios.get('https://lge-api.sucbat.com.vn/shops/storemaintant', { headers: getBaseHeaders(req.body.token) });
         res.status(response.status).json({ success: true, data: response.data });
     } catch (error) {
         res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
@@ -147,14 +138,67 @@ app.post('/proxy-get-history', checkTesterAccess, async (req, res) => {
         const customHeaders = getBaseHeaders(req.body.token);
         customHeaders['shopid'] = '0';
         customHeaders['attendantdate'] = req.body.date;
-
-        const response = await axios.get(
-            'https://lge-api.sucbat.com.vn/attendants/byshop',
-            { headers: customHeaders }
-        );
+        const response = await axios.get('https://lge-api.sucbat.com.vn/attendants/byshop', { headers: customHeaders });
         res.status(response.status).json({ success: true, data: response.data });
     } catch (error) {
         res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
+    }
+});
+
+// ==========================================
+// ADMIN VERIFY
+// ==========================================
+const verifyAdmin = async (req, res, next) => {
+    const { admin_pass } = req.headers;
+    const configDoc = await db.collection('admin_config').doc('settings').get();
+    if (!configDoc.exists || configDoc.data().password !== admin_pass) {
+        return res.status(401).json({ success: false, error: "Sai mật khẩu quản trị viên!" });
+    }
+    next();
+};
+
+// ==========================================
+// ADMIN GET TESTERS (WITH DEVICE INFO)
+// ==========================================
+app.get('/admin/testers', verifyAdmin, async (req, res) => {
+    try {
+        const snapshot = await db.collection('testers').get();
+        const testers = [];
+
+        for (const doc of snapshot.docs) {
+            const username = doc.id;
+            const testerData = doc.data();
+
+            const deviceDoc = await db.collection('devices').doc(username).get();
+            let deviceData = {};
+
+            if (deviceDoc.exists) {
+                deviceData = deviceDoc.data();
+            }
+
+            testers.push({
+                username: username,
+                ...testerData,
+                imei: deviceData.imei || "",
+                deviceToken: deviceData.deviceToken || "",
+                deviceCreatedAt: deviceData.createdAt || ""
+            });
+        }
+
+        res.json({ success: true, data: testers });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// RESET DEVICE
+app.delete('/admin/devices/:username', verifyAdmin, async (req, res) => {
+    try {
+        const normalizedUsername = req.params.username.trim().toLowerCase();
+        await db.collection('devices').doc(normalizedUsername).delete();
+        res.json({ success: true, message: "Đã reset Device thành công." });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 

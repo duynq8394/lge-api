@@ -6,127 +6,175 @@
     <title>LGE Admin Panel</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #333;}
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         h2 { color: #a50034; margin-top: 0; text-align: center;}
         .login-section { text-align: center; padding: 50px 0; }
         .dashboard-section { display: none; }
-        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 10px; font-size: 14px;}
-        button { padding: 10px 15px; background: #a50034; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
-        .add-box { background: #fff5f7; border: 1px solid #ffccd5; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;}
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px;}
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; }
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 8px; font-size: 13px;}
+        button { padding: 8px 12px; background: #a50034; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;}
+        .btn-danger { background: #dc3545; }
+        .btn-warning { background: #ffc107; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;}
+        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top;}
         th { background: #fafafa; font-weight: 600; }
-        .btn-danger { background: #dc3545; padding: 6px 10px; font-size: 12px;}
         .badge-active { background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;}
         .badge-expired { background: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;}
+        .highlight-duplicate-imei { background: #fff3cd; }
+        .highlight-duplicate-token { background: #f8d7da; }
+        .no-device { color: #999; font-style: italic; }
+        #statsBox { margin: 10px 0; font-size: 13px; font-weight: 600; }
+        #searchInput { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>⚙️ LGE ADMIN PANEL - QUẢN LÝ WHITELIST</h2>
+    <h2>⚙️ LGE ADMIN PANEL - DEVICE MANAGEMENT</h2>
     
     <div class="login-section" id="loginSection">
-        <p style="margin-bottom: 20px;">Nhập mật khẩu Master Admin để quản lý danh sách Tester:</p>
-        <input type="password" id="adminPass" placeholder="Mật khẩu Admin..." onkeyup="if(event.keyCode==13) loginAdmin()">
-        <button onclick="loginAdmin()">Vào hệ thống</button>
+        <p>Nhập mật khẩu Master Admin:</p>
+        <input type="password" id="adminPass" placeholder="Mật khẩu..." onkeyup="if(event.keyCode==13) loginAdmin()">
+        <button onclick="loginAdmin()">Đăng nhập</button>
     </div>
 
     <div class="dashboard-section" id="dashboardSection">
-        <div class="add-box">
-            <input type="text" id="newUsername" placeholder="Tên Đăng Nhập / Mã NV..." style="width: 180px;">
-            <input type="text" id="newNote" placeholder="Tên Tester / Ghi chú..." style="width: 180px;">
-            <select id="durationSelect" onchange="toggleCustomDays()">
-                <option value="30">Gói 30 Ngày</option>
-                <option value="60">Gói 60 Ngày</option>
-                <option value="90">Gói 90 Ngày</option>
-                <option value="permanent">Vĩnh viễn</option>
-                <option value="custom">Tự điền số ngày...</option>
-            </select>
-            <input type="number" id="customDays" placeholder="Số ngày..." style="display:none; width: 100px;">
-            <button onclick="addTester()" style="background: #28a745;">+ Cấp quyền</button>
-            <button onclick="loadTesters()" style="background: #6c757d;">🔄 Làm mới</button>
-        </div>
+
+        <div id="statsBox"></div>
+        <input type="text" id="searchInput" placeholder="🔎 Tìm kiếm username...">
+
         <table>
-            <thead><tr><th>Tài khoản Whitelist</th><th>Ghi chú</th><th>Ngày cấp quyền</th><th>Hạn sử dụng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Ghi chú</th>
+                    <th>IMEI</th>
+                    <th>DeviceToken</th>
+                    <th>Ngày tạo Device</th>
+                    <th>Ngày cấp</th>
+                    <th>Hạn dùng</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
             <tbody id="testersTableBody"></tbody>
         </table>
     </div>
 </div>
+
 <script>
-    let adminPassword = "";
+let adminPassword = "";
 
-    function loginAdmin() {
-        adminPassword = document.getElementById('adminPass').value;
-        if(adminPassword) {
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('dashboardSection').style.display = 'block';
-            loadTesters();
-        }
+function loginAdmin() {
+    adminPassword = document.getElementById('adminPass').value;
+    if(adminPassword) {
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('dashboardSection').style.display = 'block';
+        loadTesters();
     }
+}
 
-    function toggleCustomDays() {
-        const val = document.getElementById('durationSelect').value;
-        document.getElementById('customDays').style.display = (val === 'custom') ? 'inline-block' : 'none';
-    }
+async function loadTesters() {
+    const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
+    const result = await res.json();
+    if (!result.success) { alert(result.error); location.reload(); return; }
 
-    async function loadTesters() {
-        const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
-        const result = await res.json();
-        const tbody = document.getElementById('testersTableBody');
-        
-        if (result.success) {
-            tbody.innerHTML = '';
-            const now = new Date().getTime();
-            result.data.forEach(user => {
-                const addedStr = new Date(user.addedAt).toLocaleDateString('vi-VN');
-                let expireStr = "Vĩnh viễn";
-                let statusBadge = `<span class="badge-active">Đang chạy</span>`;
-                if (user.expiresAt) {
-                    expireStr = new Date(user.expiresAt).toLocaleDateString('vi-VN');
-                    if (now > user.expiresAt) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
-                }
-                tbody.innerHTML += `
-                    <tr>
-                        <td style="color:#a50034; font-weight:bold;">${user.username}</td>
-                        <td>${user.note}</td>
-                        <td>${addedStr}</td>
-                        <td><b>${expireStr}</b></td>
-                        <td>${statusBadge}</td>
-                        <td><button class="btn-danger" onclick="removeTester('${user.username}')">Xóa quyền</button></td>
-                    </tr>
-                `;
-            });
-        } else { alert(result.error); location.reload(); }
-    }
+    const tbody = document.getElementById('testersTableBody');
+    tbody.innerHTML = "";
 
-    async function addTester() {
-        const username = document.getElementById('newUsername').value.trim();
-        const note = document.getElementById('newNote').value.trim();
-        let duration = document.getElementById('durationSelect').value;
-        if(!username) return alert("Vui lòng nhập tên tài khoản");
-        
-        if (duration === 'custom') {
-            duration = document.getElementById('customDays').value;
-            if (!duration || duration <= 0) return alert("Vui lòng điền số ngày hợp lệ!");
+    const now = new Date().getTime();
+    let activeCount = 0;
+    let expiredCount = 0;
+    let deviceCount = 0;
+
+    const imeiMap = {};
+    const tokenMap = {};
+
+    result.data.forEach(user => {
+        if (user.imei) {
+            deviceCount++;
+            imeiMap[user.imei] = (imeiMap[user.imei] || 0) + 1;
+            tokenMap[user.deviceToken] = (tokenMap[user.deviceToken] || 0) + 1;
         }
 
-        const res = await fetch('/admin/testers', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
-            body: JSON.stringify({ username, note, duration })
+        if (user.expiresAt && now > user.expiresAt) expiredCount++;
+        else activeCount++;
+    });
+
+    document.getElementById('statsBox').innerText =
+        `Tổng: ${result.data.length} | 🟢 Hoạt động: ${activeCount} | 🔴 Hết hạn: ${expiredCount} | 📱 Có device: ${deviceCount}`;
+
+    result.data.forEach(user => {
+        const addedStr = new Date(user.addedAt).toLocaleDateString('vi-VN');
+        let expireStr = "Vĩnh viễn";
+        let statusBadge = `<span class="badge-active">Đang chạy</span>`;
+
+        if (user.expiresAt) {
+            expireStr = new Date(user.expiresAt).toLocaleDateString('vi-VN');
+            if (now > user.expiresAt) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
+        }
+
+        let imeiClass = "";
+        let tokenClass = "";
+
+        if (user.imei && imeiMap[user.imei] > 1) imeiClass = "highlight-duplicate-imei";
+        if (user.deviceToken && tokenMap[user.deviceToken] > 1) tokenClass = "highlight-duplicate-token";
+
+        tbody.innerHTML += `
+        <tr>
+            <td style="color:#a50034; font-weight:bold;">${user.username}</td>
+            <td>${user.note || "-"}</td>
+            <td class="${imeiClass}">
+                ${user.imei ? user.imei : "<span class='no-device'>Chưa có</span>"}
+            </td>
+            <td class="${tokenClass}" style="word-break:break-all;">
+                ${user.deviceToken || "-"}
+            </td>
+            <td>
+                ${user.deviceCreatedAt ? new Date(user.deviceCreatedAt).toLocaleDateString('vi-VN') : "-"}
+            </td>
+            <td>${addedStr}</td>
+            <td><b>${expireStr}</b></td>
+            <td>${statusBadge}</td>
+            <td>
+                <button class="btn-danger" onclick="removeTester('${user.username}')">Xóa</button>
+                <button class="btn-warning" onclick="resetDevice('${user.username}')">Reset Device</button>
+            </td>
+        </tr>
+        `;
+    });
+
+    document.getElementById('searchInput').addEventListener('keyup', function () {
+        const filter = this.value.toLowerCase();
+        document.querySelectorAll("#testersTableBody tr").forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
         });
-        const result = await res.json();
-        if(result.success) {
-            document.getElementById('newUsername').value = ''; document.getElementById('newNote').value = '';
-            document.getElementById('customDays').value = '';
-            loadTesters();
-        } else { alert(result.error); }
-    }
+    });
+}
 
-    async function removeTester(username) {
-        if(!confirm(`Bạn chắc chắn muốn hủy kích hoạt Whitelist của: ${username}?`)) return;
-        const res = await fetch(`/admin/testers/${username}`, { method: 'DELETE', headers: { 'admin_pass': adminPassword } });
-        if((await res.json()).success) loadTesters();
-    }
+async function resetDevice(username) {
+    if(!confirm(`Reset Device của ${username}?`)) return;
+
+    const res = await fetch(`/admin/devices/${username}`, {
+        method: 'DELETE',
+        headers: { 'admin_pass': adminPassword }
+    });
+
+    const result = await res.json();
+    if(result.success) loadTesters();
+    else alert(result.error);
+}
+
+async function removeTester(username) {
+    if(!confirm(`Xóa quyền của ${username}?`)) return;
+
+    const res = await fetch(`/admin/testers/${username}`, {
+        method: 'DELETE',
+        headers: { 'admin_pass': adminPassword }
+    });
+
+    const result = await res.json();
+    if(result.success) loadTesters();
+    else alert(result.error);
+}
 </script>
 </body>
 </html>

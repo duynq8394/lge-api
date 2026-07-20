@@ -3,8 +3,7 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const admin = require('firebase-admin');
-
-// Đọc file key cấu hình từ Render Secret Files hoặc thư mục gốc tại local
+const crypto = require('crypto');
 const serviceAccountPath = process.env.FIREBASE_KEY_PATH || './firebase-key.json';
 const serviceAccount = require(serviceAccountPath);
 
@@ -31,10 +30,8 @@ const getBaseHeaders = (token) => ({
 });
 
 // ==========================================
-// 1. LUỒNG APPS PROXY (CHO QA/TESTER TRÊN ĐIỆN THOẠI)
+// PROXY LOGIN + DEVICE IDENTITY STABLE
 // ==========================================
-
-// API Đăng nhập kết hợp kiểm tra Whitelist không phân biệt hoa thường
 app.post('/proxy-login', async (req, res) => {
     const { payload } = req.body;
     const requestUser = payload.username.trim().toLowerCase();
@@ -57,14 +54,48 @@ app.post('/proxy-login', async (req, res) => {
             expireText = `còn ${daysLeft} ngày`;
         }
 
+        // ===============================
+        // DEVICE IDENTITY STABLE LAYER
+        // ===============================
+        const deviceRef = db.collection('devices').doc(requestUser);
+        const deviceDoc = await deviceRef.get();
+
+        let imei;
+        let deviceToken;
+
+        if (!deviceDoc.exists) {
+            imei = crypto.randomUUID().toUpperCase();
+            deviceToken = crypto.randomUUID().replace(/-/g, '') + ":" + crypto.randomUUID().replace(/-/g, '');
+            await deviceRef.set({
+                imei: imei,
+                deviceToken: deviceToken,
+                createdAt: new Date().toISOString()
+            });
+        } else {
+            const deviceData = deviceDoc.data();
+            imei = deviceData.imei;
+            deviceToken = deviceData.deviceToken;
+        }
+
+        payload.IMEI = imei;
+        payload.DeviceToken = deviceToken;
+
         const response = await axios.post('https://lge-api.sucbat.com.vn/users/login/', payload, { headers: getBaseHeaders(null) });
-        res.status(response.status).json({ success: true, data: response.data, expireText: expireText });
+
+        res.status(response.status).json({
+            success: true,
+            data: response.data,
+            expireText: expireText
+        });
+
     } catch (error) {
         res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
     }
 });
 
-// MIDDLEWARE KIỂM TRA HẠN SỬ DỤNG MỌI LÚC MỌI NƠI (CHỐNG TREO TOKEN)
+// ==========================================
+// MIDDLEWARE CHECK TESTER
+// ==========================================
 const checkTesterAccess = async (req, res, next) => {
     const { request_user } = req.body;
     if (!request_user) return res.status(403).json({ success: false, error: "Lỗi xác thực danh tính Tester.", isExpired: true });
@@ -85,78 +116,46 @@ const checkTesterAccess = async (req, res, next) => {
     }
 };
 
+// ================== PROXY APIs ==================
 app.post('/proxy-upload', checkTesterAccess, async (req, res) => {
     try {
-        const response = await axios.post('https://lge-api.sucbat.com.vn/attendants/upload', req.body.payload, { headers: getBaseHeaders(req.body.token) });
+        const response = await axios.post(
+            'https://lge-api.sucbat.com.vn/attendants/upload',
+            req.body.payload,
+            { headers: getBaseHeaders(req.body.token) }
+        );
         res.status(response.status).json({ success: true, data: response.data });
-    } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
+    } catch (error) {
+        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
+    }
 });
 
 app.post('/proxy-get-shops', checkTesterAccess, async (req, res) => {
     try {
-        const response = await axios.get('https://lge-api.sucbat.com.vn/shops/storemaintant', { headers: getBaseHeaders(req.body.token) });
+        const response = await axios.get(
+            'https://lge-api.sucbat.com.vn/shops/storemaintant',
+            { headers: getBaseHeaders(req.body.token) }
+        );
         res.status(response.status).json({ success: true, data: response.data });
-    } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
+    } catch (error) {
+        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
+    }
 });
 
 app.post('/proxy-get-history', checkTesterAccess, async (req, res) => {
     try {
         const customHeaders = getBaseHeaders(req.body.token);
-        customHeaders['shopid'] = '0'; 
-        customHeaders['attendantdate'] = req.body.date; 
-        const response = await axios.get('https://lge-api.sucbat.com.vn/attendants/byshop', { headers: customHeaders });
+        customHeaders['shopid'] = '0';
+        customHeaders['attendantdate'] = req.body.date;
+
+        const response = await axios.get(
+            'https://lge-api.sucbat.com.vn/attendants/byshop',
+            { headers: customHeaders }
+        );
         res.status(response.status).json({ success: true, data: response.data });
-    } catch (error) { res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message }); }
-});
-
-// ==========================================
-// 2. CÁC API DÀNH RIÊNG CHO TRANG ADMIN (.HTML)
-// ==========================================
-const verifyAdmin = async (req, res, next) => {
-    const { admin_pass } = req.headers;
-    const configDoc = await db.collection('admin_config').doc('settings').get();
-    if (!configDoc.exists || configDoc.data().password !== admin_pass) {
-        return res.status(401).json({ success: false, error: "Sai mật khẩu quản trị viên!" });
+    } catch (error) {
+        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
     }
-    next();
-};
-
-app.get('/admin/testers', verifyAdmin, async (req, res) => {
-    try {
-        const snapshot = await db.collection('testers').get();
-        const testers = [];
-        snapshot.forEach(doc => testers.push({ username: doc.id, ...doc.data() }));
-        res.json({ success: true, data: testers });
-    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-app.post('/admin/testers', verifyAdmin, async (req, res) => {
-    const { username, note, duration } = req.body;
-    if (!username) return res.status(400).json({ success: false, error: "Thiếu tên tài khoản!" });
-    
-    const normalizedUsername = username.trim().toLowerCase();
-    let expiresAt = null; 
-    if (duration !== "permanent") {
-        const days = parseInt(duration);
-        expiresAt = new Date().getTime() + (days * 24 * 60 * 60 * 1000);
-    }
-
-    try {
-        await db.collection('testers').doc(normalizedUsername).set({
-            addedAt: new Date().toISOString(),
-            note: note || "",
-            expiresAt: expiresAt
-        });
-        res.json({ success: true, message: `Đã cấp quyền thành công cho ${normalizedUsername}` });
-    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
-});
-
-app.delete('/admin/testers/:username', verifyAdmin, async (req, res) => {
-    try {
-        const normalizedUsername = req.params.username.trim().toLowerCase();
-        await db.collection('testers').doc(normalizedUsername).delete();
-        res.json({ success: true, message: "Đã thu hồi quyền truy cập thành công." });
-    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 app.listen(PORT, () => console.log(`[SYSTEM] Máy chủ WebApp LGE chạy ổn định tại Port ${PORT}`));

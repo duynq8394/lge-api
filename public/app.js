@@ -36,7 +36,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+// ACCURACY PHÂN BỐ TỰ NHIÊN (≤ 70m)
+function generateRealisticAccuracy() {
+    const rand = Math.random();
 
+    if (rand < 0.4) return 5 + Math.random() * 10;       // 5–15m
+    if (rand < 0.7) return 15 + Math.random() * 15;      // 15–30m
+    if (rand < 0.9) return 30 + Math.random() * 20;      // 30–50m
+    return 50 + Math.random() * 20;                      // 50–70m
+}
 function switchTab(tabId, navElement) {
     document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -57,7 +65,7 @@ function printLog(msg) {
 }
 
 // THUẬT TOÁN ĐỘ NHIỄU GPS HÌNH TRÒN PHÂN BỐ ĐỀU CHUẨN XÁC TOÁN HỌC
-function addGpsNoise(lat, lng, maxMeters = 45) {
+function addGpsNoise(lat, lng, maxMeters = 65) {
     const r = 1 + Math.random() * (maxMeters - 1); 
     const theta = Math.random() * 2 * Math.PI; 
 
@@ -171,8 +179,8 @@ document.getElementById('btnRandomGps').addEventListener('click', () => {
         }
     }
 
-    // Tiến hành xoay tạo nhiễu ngẫu nhiên trong bán kính hình tròn an toàn (max 45 mét)
-    const noisyGps = addGpsNoise(baseLat, baseLng, 45);
+    // Tiến hành xoay tạo nhiễu ngẫu nhiên trong bán kính hình tròn an toàn (max 65 mét)
+    const noisyGps = addGpsNoise(baseLat, baseLng, 65);
     
     // Khóa dữ liệu hiển thị cố định lên ô Input màn hình cho Tester kiểm tra duyệt qua
     document.getElementById('lat').value = noisyGps.latitude;
@@ -275,7 +283,7 @@ if (btnSubmit) {
                     const finalLat = parseFloat(finalLatStr);
                     const finalLng = parseFloat(finalLngStr);
 
-                    const randAccuracy = 20 + Math.random() * 3; 
+                    const randAccuracy = generateRealisticAccuracy();
                     const fakePhotoName = crypto.randomUUID().toUpperCase() + ".jpg";
                     const realTime = getRealTime();
 

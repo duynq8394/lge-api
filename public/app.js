@@ -1,4 +1,4 @@
-const API_BASE = "https://lge-api.sucbat.com.vn";
+const API_BASE = "https://lgpg-sapi.sucbat.com.vn";
 let token = "";
 let reqUser = "";
 let nextPhotoType = "0";

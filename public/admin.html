@@ -8,15 +8,19 @@
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #333;}
         .container { max-width: 1400px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         h2 { color: #a50034; margin-top: 0; text-align: center;}
+        h3 { color: #a50034; margin: 16px 0 8px; font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 6px;}
         .login-section { text-align: center; padding: 50px 0; }
         .dashboard-section { display: none; }
-        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 8px; font-size: 13px;}
+        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 8px; font-size: 13px; box-sizing: border-box;}
         button { padding: 8px 12px; background: #a50034; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;}
         button:disabled { background: #ccc; cursor: not-allowed; }
         .btn-danger { background: #dc3545; }
         .btn-warning { background: #ffc107; color: #333; }
         .btn-edit { background: #0066cc; }
         .btn-extend { background: #28a745; padding: 4px 8px; font-size: 11px; margin: 1px; }
+        .btn-cancel { background: #6c757d; }
+        .btn-reset { background: #6c757d; }
+        .btn-lge { background: #17a2b8; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;}
         th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top;}
         th { background: #fafafa; font-weight: 600; }
@@ -26,38 +30,52 @@
         .highlight-duplicate-token { background: #f8d7da; }
         .no-device { color: #999; font-style: italic; }
         #statsBox { margin: 10px 0; font-size: 13px; font-weight: 600; }
-        #searchInput { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; box-sizing: border-box;}
-        .add-form { background: #fff8fa; padding: 12px; border-radius: 8px; border: 1px solid #f5b3c3; margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1.5fr 1fr auto; gap: 8px; align-items: end;}
-        .add-form label { font-size: 11px; font-weight: 700; color: #666; display: block; margin-bottom: 4px;}
-        .add-form input { width: 100%; margin-bottom: 0; box-sizing: border-box;}
-        .extend-cell { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px;}
+        #searchInput { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; }
+
+        /* VERSION CONFIG */
+        .version-card { background: #f0f8ff; padding: 16px; border-radius: 10px; border: 1px solid #cce5ff; margin-bottom: 16px;}
+        .version-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; margin-bottom: 10px;}
+        .version-grid .field label { font-size: 11px; font-weight: 700; color: #555; display: block; margin-bottom: 4px;}
+        .version-grid .field input { width: 100%; margin-bottom: 0; font-family: 'Courier New', monospace;}
+        .version-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;}
+        .runtime-preview { background: #1e1e1e; color: #4af626; padding: 10px 14px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 12px; margin-top: 12px; line-height: 1.7;}
+        .runtime-preview .label { color: #ffc107; }
+        .runtime-preview .value { color: #4af626; }
+        .runtime-preview .ua { color: #61dafb; word-break: break-all;}
+        .lge-ref { background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffc107; font-size: 12px; margin-top: 8px; display: none;}
+        .lge-ref.ok { display: block; background: #d4edda; border-color: #28a745;}
+
+        .add-form { display: grid; grid-template-columns: 1fr 1.5fr 1fr 1fr auto; gap: 8px; align-items: end; background: #fff8fa; padding: 12px; border-radius: 8px; border: 1px solid #f5b3c3; margin-bottom: 12px;}
+        .add-form label, .modal label { font-size: 11px; font-weight: 700; color: #666; display: block; margin-bottom: 4px;}
+        .add-form input { margin-bottom: 0;}
 
         /* Toast */
         .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
         .toast { padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; color: white; box-shadow: 0 6px 20px rgba(0,0,0,0.15); animation: toastIn 0.3s; max-width: 350px;}
         .toast-success { background: #059669; }
         .toast-error { background: #dc3545; }
+        .toast-info { background: #0066cc; }
         .toast-out { animation: toastOut 0.35s forwards; }
         @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes toastOut { to { opacity: 0; transform: translateX(20px); } }
 
         /* Modal */
-        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px;}
         .modal-bg.active { display: flex; }
-        .modal { background: white; padding: 24px; border-radius: 12px; max-width: 420px; width: 90%; }
-        .modal h3 { margin: 0 0 15px; color: #a50034; font-size: 16px; }
-        .modal label { display: block; font-size: 12px; font-weight: 700; color: #555; margin-bottom: 4px; margin-top: 10px;}
-        .modal input { width: 100%; box-sizing: border-box; padding: 10px; }
+        .modal { background: white; padding: 24px; border-radius: 12px; max-width: 480px; width: 100%; }
+        .modal h3 { margin: 0 0 15px; color: #a50034; font-size: 16px; border: none; padding: 0;}
+        .modal input { width: 100%; padding: 10px; margin-bottom: 4px; font-family: 'Courier New', monospace; letter-spacing: 0.5px;}
+        .modal .hint { font-size: 11px; color: #888; margin-bottom: 12px; }
         .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end;}
         .modal-actions button { padding: 10px 18px; }
-        .btn-cancel { background: #6c757d; }
+        #editImeiError { color: #dc3545; font-size: 12px; font-weight: 600; min-height: 16px; }
     </style>
 </head>
 <body>
 <div class="toast-container" id="toastContainer"></div>
 
 <div class="container">
-    <h2>⚙️ LGE ADMIN PANEL - DEVICE MANAGEMENT</h2>
+    <h2>⚙️ LGE ADMIN PANEL</h2>
 
     <div class="login-section" id="loginSection">
         <p>Nhập mật khẩu Master Admin:</p>
@@ -66,22 +84,69 @@
     </div>
 
     <div class="dashboard-section" id="dashboardSection">
+
+        <!-- VERSION & BUILD CONFIG -->
+        <h3>📱 Cấu hình App Version & Build Number</h3>
+        <div class="version-card">
+            <div class="version-grid">
+                <div class="field">
+                    <label>App Version (X.Y.Z) *</label>
+                    <input type="text" id="appVersionInput" placeholder="1.4.3">
+                </div>
+                <div class="field">
+                    <label>Build Number (số) *</label>
+                    <input type="text" id="buildNumberInput" placeholder="43">
+                </div>
+                <div class="field">
+                    <label>App ID</label>
+                    <input type="text" id="appIdInput" placeholder="20H343">
+                </div>
+                <div class="field">
+                    <label>User-Agent (để trống = auto)</label>
+                    <input type="text" id="userAgentInput" placeholder="Để trống → fieldforce/{build} CFNetwork/...">
+                </div>
+            </div>
+
+            <div class="version-actions">
+                <button onclick="saveVersion()" id="btnSaveVersion">💾 Lưu cấu hình</button>
+                <button class="btn-reset" onclick="resetVersion()">↺ Reset về mặc định</button>
+                <button class="btn-lge" onclick="checkLgeVersion()" id="btnCheckLge">🌐 Check LGE version</button>
+            </div>
+
+            <div id="lgeRef" class="lge-ref"></div>
+
+            <div class="runtime-preview">
+                <div><span class="label">▶ Đang áp dụng runtime:</span></div>
+                <div>  <span class="label">getVersion  </span>= <span class="value" id="rtAppVersion">-</span></div>
+                <div>  <span class="label">versionid   </span>= <span class="value" id="rtBuildNumber">-</span></div>
+                <div>  <span class="label">AppId       </span>= <span class="value" id="rtAppId">-</span></div>
+                <div>  <span class="label">User-Agent  </span>= <span class="ua" id="rtUserAgent">-</span></div>
+            </div>
+        </div>
+
+        <!-- ADD TESTER -->
+        <h3>➕ Thêm Tester</h3>
         <div class="add-form">
             <div>
                 <label>Username *</label>
-                <input type="text" id="newUsername" placeholder="ví dụ: nv001">
+                <input type="text" id="newUsername" placeholder="nv001">
             </div>
             <div>
                 <label>Ghi chú</label>
-                <input type="text" id="newNote" placeholder="Tên nhân viên / khu vực...">
+                <input type="text" id="newNote" placeholder="Tên nhân viên...">
             </div>
             <div>
-                <label>Hạn dùng (trống = vĩnh viễn)</label>
+                <label>Hạn dùng (trống = ∞)</label>
                 <input type="date" id="newExpiresAt">
             </div>
-            <button onclick="addTester()" id="btnAddTester">➕ Thêm Tester</button>
+            <div>
+                <label>IMEI (tùy chọn)</label>
+                <input type="text" id="newImei" placeholder="C6598981-..." maxlength="36" style="font-family:'Courier New',monospace;">
+            </div>
+            <button onclick="addTester()" id="btnAddTester">➕ Thêm</button>
         </div>
 
+        <!-- TESTERS LIST -->
         <div id="statsBox"></div>
         <input type="text" id="searchInput" placeholder="🔎 Tìm username / ghi chú / IMEI...">
 
@@ -104,14 +169,22 @@
     </div>
 </div>
 
-<!-- Modal Edit -->
+<!-- Edit Modal -->
 <div class="modal-bg" id="editModal">
     <div class="modal">
         <h3>Sửa Tester: <span id="editUsernameLabel"></span></h3>
+
         <label>Ghi chú</label>
-        <input type="text" id="editNote">
+        <input type="text" id="editNote" style="font-family: inherit; letter-spacing: 0;">
+
         <label>Hạn dùng (trống = vĩnh viễn)</label>
-        <input type="date" id="editExpiresAt">
+        <input type="date" id="editExpiresAt" style="font-family: inherit; letter-spacing: 0;">
+
+        <label>IMEI (định dạng UUID)</label>
+        <input type="text" id="editImei" placeholder="C6598981-5CDA-4819-A0C1-C9D8128F335F" maxlength="36" autocomplete="off">
+        <div class="hint">Để trống = giữ IMEI hiện tại. Dùng Reset Device nếu muốn xóa hẳn.</div>
+        <div id="editImeiError"></div>
+
         <div class="modal-actions">
             <button class="btn-cancel" onclick="closeEditModal()">Hủy</button>
             <button onclick="saveEditTester()">💾 Lưu</button>
@@ -139,17 +212,36 @@ function toMillis(v) {
     return null;
 }
 
+function isValidIMEI(s) {
+    return /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/.test(s);
+}
+
+function formatIMEI(raw) {
+    const c = (raw || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+    if (c.length !== 32) return null;
+    return `${c.slice(0,8)}-${c.slice(8,12)}-${c.slice(12,16)}-${c.slice(16,20)}-${c.slice(20)}`;
+}
+
 function toast(msg, type = 'success') {
     const c = document.getElementById('toastContainer');
     const t = document.createElement('div');
     t.className = 'toast toast-' + type;
     t.innerText = msg;
     c.appendChild(t);
-    setTimeout(() => {
-        t.classList.add('toast-out');
-        setTimeout(() => t.remove(), 350);
-    }, 3000);
+    setTimeout(() => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 350); }, 3000);
 }
+
+document.getElementById('newImei')?.addEventListener('input', function() {
+    const prev = this.value;
+    const f = formatIMEI(prev) || prev.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+    if (f !== prev) this.value = f.slice(0, 36);
+});
+
+document.getElementById('editImei')?.addEventListener('input', function() {
+    const prev = this.value;
+    const f = formatIMEI(prev) || prev.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+    if (f !== prev) this.value = f.slice(0, 36);
+});
 
 async function loginAdmin() {
     const pwd = document.getElementById('adminPass').value.trim();
@@ -159,8 +251,7 @@ async function loginAdmin() {
     btn.disabled = true; btn.innerText = 'Đang xác thực...';
     try {
         const res = await fetch('/admin/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ admin_pass: pwd })
         });
         const result = await res.json();
@@ -169,12 +260,10 @@ async function loginAdmin() {
         adminPassword = pwd;
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('dashboardSection').style.display = 'block';
+        loadVersion();
         loadTesters();
-    } catch (e) {
-        toast('Không kết nối được server.', 'error');
-    } finally {
-        btn.disabled = false; btn.innerText = 'Đăng nhập';
-    }
+    } catch (e) { toast('Không kết nối server.', 'error'); }
+    finally { btn.disabled = false; btn.innerText = 'Đăng nhập'; }
 }
 window.loginAdmin = loginAdmin;
 
@@ -187,6 +276,115 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// ================== VERSION CONFIG ==================
+async function loadVersion() {
+    try {
+        const res = await fetch('/admin/config/version', { headers: { 'admin_pass': adminPassword } });
+        const result = await res.json();
+        if (!result.success) return toast(result.error, 'error');
+
+        const d = result.data;
+        document.getElementById('appVersionInput').value = d.appVersion || '';
+        document.getElementById('buildNumberInput').value = d.buildNumber || '';
+        document.getElementById('appIdInput').value = d.appId || '';
+        document.getElementById('userAgentInput').value = d.userAgent || '';
+
+        renderRuntime(d.runtime);
+    } catch (e) { toast('Lỗi tải config.', 'error'); }
+}
+
+function renderRuntime(rt) {
+    if (!rt) return;
+    document.getElementById('rtAppVersion').innerText = rt.appVersion;
+    document.getElementById('rtBuildNumber').innerText = rt.buildNumber;
+    document.getElementById('rtAppId').innerText = rt.appId;
+    document.getElementById('rtUserAgent').innerText = rt.userAgent;
+}
+
+async function saveVersion() {
+    const appVersion = document.getElementById('appVersionInput').value.trim();
+    const buildNumber = document.getElementById('buildNumberInput').value.trim();
+    const appId = document.getElementById('appIdInput').value.trim();
+    const userAgent = document.getElementById('userAgentInput').value.trim();
+
+    if (appVersion && !/^\d+\.\d+\.\d+$/.test(appVersion)) {
+        return toast('App Version phải dạng X.Y.Z (VD: 1.4.3)', 'error');
+    }
+    if (buildNumber && !/^\d+$/.test(buildNumber)) {
+        return toast('Build Number phải là số nguyên (VD: 43)', 'error');
+    }
+
+    const btn = document.getElementById('btnSaveVersion');
+    btn.disabled = true; btn.innerText = 'Đang lưu...';
+
+    try {
+        const res = await fetch('/admin/config/version', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ appVersion, buildNumber, appId, userAgent })
+        });
+        const result = await res.json();
+        if (result.success) {
+            toast('Đã lưu cấu hình version.', 'success');
+            renderRuntime(result.runtime);
+            // Cập nhật lại form để phản ánh giá trị đã merge
+            loadVersion();
+        } else {
+            toast(result.error || 'Lỗi lưu.', 'error');
+        }
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
+    finally { btn.disabled = false; btn.innerText = '💾 Lưu cấu hình'; }
+}
+window.saveVersion = saveVersion;
+
+async function resetVersion() {
+    if (!confirm('Reset toàn bộ config version về mặc định (1.4.3 / 43 / 20H343 / UA auto)?')) return;
+    try {
+        const res = await fetch('/admin/config/version/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword }
+        });
+        const result = await res.json();
+        if (result.success) { toast('Đã reset.', 'success'); loadVersion(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
+}
+window.resetVersion = resetVersion;
+
+async function checkLgeVersion() {
+    const btn = document.getElementById('btnCheckLge');
+    const box = document.getElementById('lgeRef');
+    btn.disabled = true; btn.innerText = 'Đang kiểm tra...';
+    box.className = 'lge-ref';
+
+    try {
+        const res = await fetch('/admin/config/version/lge', { headers: { 'admin_pass': adminPassword } });
+        const result = await res.json();
+
+        if (result.success) {
+            box.className = 'lge-ref ok';
+            box.innerHTML = `<b>🌐 LGE /public/appver trả về:</b> version <code>${result.data.lgeVersion || 'N/A'}</code>
+                <br><small style="color:#666;">(Chỉ để tham khảo — KHÔNG tự động áp dụng. Bấm "Lưu" để dùng version này.)</small>`;
+            if (result.data.lgeVersion) {
+                // Optional: prefill vào input
+                if (confirm(`LGE hiện đang báo version "${result.data.lgeVersion}".\n\nBạn có muốn điền version này vào form để lưu không?`)) {
+                    document.getElementById('appVersionInput').value = result.data.lgeVersion;
+                }
+            }
+        } else {
+            box.className = 'lge-ref';
+            box.style.display = 'block';
+            box.innerHTML = `<b>❌ Không fetch được:</b> ${result.error}<br><small>${result.hint || ''}</small>`;
+        }
+    } catch (e) {
+        toast('Lỗi kết nối.', 'error');
+    } finally {
+        btn.disabled = false; btn.innerText = '🌐 Check LGE version';
+    }
+}
+window.checkLgeVersion = checkLgeVersion;
+
+// ================== TESTERS ==================
 async function loadTesters() {
     try {
         const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
@@ -223,14 +421,12 @@ async function loadTesters() {
             const addedMs = toMillis(u.addedAt);
             const expMs = toMillis(u.expiresAt);
             const addedStr = addedMs ? new Date(addedMs).toLocaleDateString('vi-VN') : '-';
-
             let expireStr = 'Vĩnh viễn';
             let statusBadge = `<span class="badge-active">Đang chạy</span>`;
             if (expMs != null) {
                 expireStr = new Date(expMs).toLocaleDateString('vi-VN');
                 if (now > expMs) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
             }
-
             const imeiClass = u.imei && imeiMap[u.imei] > 1 ? 'highlight-duplicate-imei' : '';
             const tokenClass = u.deviceToken && tokenMap[u.deviceToken] > 1 ? 'highlight-duplicate-token' : '';
             const devCreatedMs = toMillis(u.deviceCreatedAt);
@@ -240,8 +436,8 @@ async function loadTesters() {
                 <tr>
                     <td style="color:#a50034; font-weight:bold;">${u.username}</td>
                     <td>${u.note || '-'}</td>
-                    <td class="${imeiClass}">${u.imei || "<span class='no-device'>Chưa có</span>"}</td>
-                    <td class="${tokenClass}" style="word-break:break-all;">${u.deviceToken || '-'}</td>
+                    <td class="${imeiClass}" style="font-family: monospace; font-size: 11px;">${u.imei || "<span class='no-device'>Chưa có</span>"}</td>
+                    <td class="${tokenClass}" style="word-break:break-all; font-size: 11px;">${u.deviceToken || '-'}</td>
                     <td>${devCreatedStr}</td>
                     <td>${addedStr}</td>
                     <td><b>${expireStr}</b></td>
@@ -250,7 +446,7 @@ async function loadTesters() {
                         <button class="btn-edit" onclick="openEditModal('${u.username}')">Sửa</button>
                         <button class="btn-warning" onclick="resetDevice('${u.username}')">Reset</button>
                         <button class="btn-danger" onclick="removeTester('${u.username}')">Xóa</button>
-                        <div class="extend-cell">
+                        <div style="margin-top:3px;">
                             <button class="btn-extend" onclick="extendTester('${u.username}', 7)">+7d</button>
                             <button class="btn-extend" onclick="extendTester('${u.username}', 30)">+30d</button>
                             <button class="btn-extend" onclick="extendTester('${u.username}', 90)">+90d</button>
@@ -258,17 +454,17 @@ async function loadTesters() {
                     </td>
                 </tr>`;
         });
-    } catch (e) {
-        toast('Lỗi kết nối: ' + e.message, 'error');
-    }
+    } catch (e) { toast('Lỗi kết nối: ' + e.message, 'error'); }
 }
 
 async function addTester() {
     const username = document.getElementById('newUsername').value.trim();
     const note = document.getElementById('newNote').value.trim();
     const expiresAtRaw = document.getElementById('newExpiresAt').value;
+    const imei = document.getElementById('newImei').value.trim().toUpperCase();
 
     if (!username) return toast('Username không được rỗng.', 'error');
+    if (imei && !isValidIMEI(imei)) return toast('IMEI không đúng định dạng UUID.', 'error');
 
     let expiresAt = null;
     if (expiresAtRaw) {
@@ -279,28 +475,25 @@ async function addTester() {
 
     const btn = document.getElementById('btnAddTester');
     btn.disabled = true; btn.innerText = 'Đang thêm...';
-
     try {
         const res = await fetch('/admin/testers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
-            body: JSON.stringify({ username, note, expiresAt })
+            body: JSON.stringify({ username, note, expiresAt, imei: imei || undefined })
         });
         const result = await res.json();
         if (result.success) {
             document.getElementById('newUsername').value = '';
             document.getElementById('newNote').value = '';
             document.getElementById('newExpiresAt').value = '';
+            document.getElementById('newImei').value = '';
             toast(result.message || 'Thêm thành công!', 'success');
             loadTesters();
         } else {
             toast(result.error || 'Lỗi thêm tester.', 'error');
         }
-    } catch (e) {
-        toast('Lỗi kết nối.', 'error');
-    } finally {
-        btn.disabled = false; btn.innerText = '➕ Thêm Tester';
-    }
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
+    finally { btn.disabled = false; btn.innerText = '➕ Thêm'; }
 }
 window.addTester = addTester;
 
@@ -312,6 +505,8 @@ function openEditModal(username) {
     document.getElementById('editNote').value = t.note || '';
     const expMs = toMillis(t.expiresAt);
     document.getElementById('editExpiresAt').value = expMs ? new Date(expMs).toISOString().slice(0, 10) : '';
+    document.getElementById('editImei').value = t.imei || '';
+    document.getElementById('editImeiError').innerText = '';
     document.getElementById('editModal').classList.add('active');
 }
 window.openEditModal = openEditModal;
@@ -326,15 +521,25 @@ async function saveEditTester() {
     if (!editingUsername) return;
     const note = document.getElementById('editNote').value.trim();
     const dateStr = document.getElementById('editExpiresAt').value;
+    const imeiRaw = document.getElementById('editImei').value.trim().toUpperCase();
+    const errEl = document.getElementById('editImeiError');
+
+    if (imeiRaw && !isValidIMEI(imeiRaw)) {
+        errEl.innerText = "IMEI không đúng định dạng UUID";
+        return;
+    }
+    errEl.innerText = '';
 
     const payload = { note };
-    if (dateStr.trim() === '') {
-        payload.expiresAt = null;
-    } else {
+    if (dateStr.trim() === '') payload.expiresAt = null;
+    else {
         const ms = new Date(dateStr + 'T23:59:59').getTime();
         if (Number.isNaN(ms)) return toast('Ngày không hợp lệ.', 'error');
         payload.expiresAt = ms;
     }
+
+    const currentImei = testersCache.find(t => t.username === editingUsername)?.imei || '';
+    if (imeiRaw && imeiRaw !== currentImei) payload.imei = imeiRaw;
 
     try {
         const res = await fetch(`/admin/testers/${encodeURIComponent(editingUsername)}`, {
@@ -343,13 +548,8 @@ async function saveEditTester() {
             body: JSON.stringify(payload)
         });
         const result = await res.json();
-        if (result.success) {
-            toast('Đã cập nhật tester.', 'success');
-            closeEditModal();
-            loadTesters();
-        } else {
-            toast(result.error, 'error');
-        }
+        if (result.success) { toast('Đã cập nhật.', 'success'); closeEditModal(); loadTesters(); }
+        else toast(result.error, 'error');
     } catch (e) { toast('Lỗi kết nối.', 'error'); }
 }
 window.saveEditTester = saveEditTester;
@@ -357,13 +557,10 @@ window.saveEditTester = saveEditTester;
 async function extendTester(username, days) {
     const t = testersCache.find(x => x.username === username);
     if (!t) return;
-
     const currentExp = toMillis(t.expiresAt);
     const base = currentExp && currentExp > Date.now() ? currentExp : Date.now();
-    const newExp = base + days * 24 * 60 * 60 * 1000;
-
-    if (!confirm(`Gia hạn "${username}" thêm ${days} ngày?\nHạn mới: ${new Date(newExp).toLocaleDateString('vi-VN')}`)) return;
-
+    const newExp = base + days * 86400000;
+    if (!confirm(`Gia hạn "${username}" +${days} ngày?\nHạn mới: ${new Date(newExp).toLocaleDateString('vi-VN')}`)) return;
     try {
         const res = await fetch(`/admin/testers/${encodeURIComponent(username)}`, {
             method: 'PUT',
@@ -371,18 +568,17 @@ async function extendTester(username, days) {
             body: JSON.stringify({ expiresAt: newExp })
         });
         const result = await res.json();
-        if (result.success) { toast(`Đã gia hạn +${days} ngày.`, 'success'); loadTesters(); }
+        if (result.success) { toast(`Đã +${days} ngày.`, 'success'); loadTesters(); }
         else toast(result.error, 'error');
     } catch (e) { toast('Lỗi kết nối.', 'error'); }
 }
 window.extendTester = extendTester;
 
 async function resetDevice(username) {
-    if (!confirm(`Reset Device của "${username}"?`)) return;
+    if (!confirm(`Reset Device của "${username}"?\nIMEI sẽ bị xóa, user phải nhập IMEI mới khi login.`)) return;
     try {
         const res = await fetch(`/admin/devices/${encodeURIComponent(username)}`, {
-            method: 'DELETE',
-            headers: { 'admin_pass': adminPassword }
+            method: 'DELETE', headers: { 'admin_pass': adminPassword }
         });
         const result = await res.json();
         if (result.success) { toast(result.message, 'success'); loadTesters(); }
@@ -395,8 +591,7 @@ async function removeTester(username) {
     if (!confirm(`XÓA VĨNH VIỄN "${username}"?\nHành động không thể hoàn tác.`)) return;
     try {
         const res = await fetch(`/admin/testers/${encodeURIComponent(username)}`, {
-            method: 'DELETE',
-            headers: { 'admin_pass': adminPassword }
+            method: 'DELETE', headers: { 'admin_pass': adminPassword }
         });
         const result = await res.json();
         if (result.success) { toast(result.message, 'success'); loadTesters(); }

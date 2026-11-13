@@ -6,12 +6,12 @@
     <title>Đăng Nhập - Hệ Thống LGE</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent;}
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         body { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
         .login-card { background: white; width: 100%; max-width: 400px; padding: 40px 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); margin: 20px; }
         .logo-area { text-align: center; margin-bottom: 35px; }
         .logo-area h1 { color: #a50034; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
-        .logo-area p { color: #6b7280; font-size: 14px; font-weight: 500;}
+        .logo-area p { color: #6b7280; font-size: 14px; font-weight: 500; }
         .input-group { margin-bottom: 22px; position: relative; }
         .input-group label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
         .input-group input { width: 100%; padding: 15px 16px; border: 1.5px solid #e5e7eb; border-radius: 12px; font-size: 15px; background: #f9fafb; transition: all 0.3s ease; outline: none; color: #111827; }
@@ -23,9 +23,41 @@
         .btn-login:disabled { background: #fca5a5; cursor: not-allowed; box-shadow: none; }
         #msgBox { text-align: center; margin-bottom: 20px; font-size: 14px; font-weight: 600; min-height: 20px; }
         .footer-text { text-align: center; margin-top: 25px; font-size: 12px; color: #9ca3af; }
+
+        /* IMEI Modal */
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+        .modal-bg.active { display: flex; }
+        .modal { background: white; padding: 24px; border-radius: 16px; max-width: 420px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .modal h3 { color: #a50034; font-size: 18px; margin-bottom: 10px; }
+        .modal p { font-size: 13px; color: #666; margin-bottom: 18px; line-height: 1.5; }
+        .modal .input-group { margin-bottom: 12px; }
+        .modal .input-group label { font-size: 12px; }
+        .modal .input-group input { padding: 12px 14px; font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 0.5px; text-transform: uppercase; }
+        .modal .hint { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.4; }
+        .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .modal-actions button { padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-cancel { background: #f3f4f6; color: #374151; flex: 0 0 auto; padding: 12px 20px; }
+        .btn-cancel:hover { background: #e5e7eb; }
+        .btn-confirm { background: #a50034; color: white; flex: 1; }
+        .btn-confirm:hover:not(:disabled) { background: #8a0029; }
+        .btn-confirm:disabled { background: #fca5a5; cursor: not-allowed; }
+        #imeiError { color: #dc3545; font-size: 12px; font-weight: 600; min-height: 18px; margin-top: 6px; }
+
+        /* Toast */
+        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: 90vw; }
+        .toast { padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 700; color: white; box-shadow: 0 6px 20px rgba(0,0,0,0.15); animation: toastIn 0.3s ease-out; pointer-events: auto; max-width: 400px; text-align: center; }
+        .toast-success { background: #059669; }
+        .toast-error { background: #dc3545; }
+        .toast-info { background: #0066cc; }
+        .toast-out { animation: toastOut 0.35s ease-in forwards; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toastOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-10px) scale(0.95); } }
     </style>
 </head>
 <body>
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="login-card">
         <div class="logo-area">
             <h1>LGE FIELD FORCE</h1>
@@ -34,11 +66,11 @@
         <div id="msgBox"></div>
         <div class="input-group">
             <label>Tài khoản đăng nhập / Username</label>
-            <input type="text" id="username" placeholder="Nhập tài khoản của bạn...">
+            <input type="text" id="username" placeholder="Nhập tài khoản của bạn..." autocomplete="username">
         </div>
         <div class="input-group">
             <label>Mật khẩu / Password</label>
-            <input type="password" id="password" placeholder="Nhập mật khẩu..." onkeyup="if(event.keyCode==13) processLogin()">
+            <input type="password" id="password" placeholder="Nhập mật khẩu..." autocomplete="current-password" onkeyup="if(event.keyCode==13) processLogin()">
         </div>
         <div class="options">
             <label class="checkbox-label"><input type="checkbox" id="rememberMe"> Nhớ tài khoản mật khẩu</label>
@@ -47,8 +79,32 @@
         <div class="footer-text">Hệ thống giới hạn bảo mật Whitelist Tester</div>
     </div>
 
+    <!-- IMEI Modal -->
+    <div class="modal-bg" id="imeiModal">
+        <div class="modal">
+            <h3>🔐 Nhập IMEI thiết bị</h3>
+            <p>Đây là lần đầu đăng nhập với tài khoản này. Vui lòng nhập IMEI thiết bị để tiếp tục.</p>
+            <div class="input-group">
+                <label>IMEI (định dạng UUID)</label>
+                <input type="text" id="imeiInput" placeholder="C6598981-5CDA-4819-A0C1-C9D8128F335F" maxlength="36" autocomplete="off" spellcheck="false">
+                <div class="hint">VD: C6598981-5CDA-4819-A0C1-C9D8128F335F<br>Chữ tự động viết hoa, dấu gạch tự thêm khi gõ.</div>
+            </div>
+            <div id="imeiError"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeIMEIModal()">Hủy</button>
+                <button class="btn-confirm" id="btnSubmitIMEI" onclick="submitIMEI()">Xác nhận</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        if (localStorage.getItem('lge_token')) window.location.href = 'index.html';
+        // ============================================
+        // INIT
+        // ============================================
+        if (localStorage.getItem('lge_token')) {
+            window.location.href = 'index.html';
+        }
+
         window.onload = () => {
             if (localStorage.getItem('lge_saved_user')) {
                 document.getElementById('username').value = localStorage.getItem('lge_saved_user');
@@ -56,46 +112,194 @@
                 document.getElementById('rememberMe').checked = true;
             }
         };
+
+        // ============================================
+        // HELPERS
+        // ============================================
         function getClientTime() {
-            const now = new Date(); const pad = n => n.toString().padStart(2, '0');
-            return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            const now = new Date();
+            const pad = n => n.toString().padStart(2, '0');
+            return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
         }
 
-        async function processLogin() {
+        function isValidIMEI(str) {
+            return /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/.test(str);
+        }
+
+        function formatIMEI(raw) {
+            const cleaned = (raw || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+            if (cleaned.length !== 32) return null;
+            return `${cleaned.slice(0, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(12, 16)}-${cleaned.slice(16, 20)}-${cleaned.slice(20)}`;
+        }
+
+        function showToast(msg, type = 'success') {
+            const c = document.getElementById('toastContainer');
+            if (!c) return;
+            const t = document.createElement('div');
+            t.className = 'toast toast-' + type;
+            t.innerText = msg;
+            c.appendChild(t);
+            setTimeout(() => {
+                t.classList.add('toast-out');
+                setTimeout(() => t.remove(), 350);
+            }, 3200);
+        }
+
+        // ============================================
+        // IMEI INPUT AUTO-FORMAT
+        // ============================================
+        const imeiInputEl = document.getElementById('imeiInput');
+        imeiInputEl.addEventListener('input', function () {
+            const prev = this.value;
+            let raw = prev.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+            if (raw.length > 32) raw = raw.slice(0, 32);
+
+            let formatted = raw;
+            if (raw.length > 8) formatted = raw.slice(0, 8) + '-' + raw.slice(8);
+            if (raw.length > 12) formatted = raw.slice(0, 8) + '-' + raw.slice(8, 12) + '-' + raw.slice(12);
+            if (raw.length > 16) formatted = raw.slice(0, 8) + '-' + raw.slice(8, 12) + '-' + raw.slice(12, 16) + '-' + raw.slice(16);
+            if (raw.length > 20) formatted = raw.slice(0, 8) + '-' + raw.slice(8, 12) + '-' + raw.slice(12, 16) + '-' + raw.slice(16, 20) + '-' + raw.slice(20);
+
+            if (formatted !== prev) this.value = formatted;
+        });
+
+        imeiInputEl.addEventListener('keyup', function (e) {
+            if (e.keyCode === 13) submitIMEI();
+        });
+
+        // ============================================
+        // LOGIN PROCESS
+        // ============================================
+        let lastLoginUser = '';
+        let lastLoginPass = '';
+        let lastRemember = false;
+
+        async function processLogin(imeiOverride) {
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value.trim();
             const remember = document.getElementById('rememberMe').checked;
             const msgBox = document.getElementById('msgBox');
             const btn = document.getElementById('btnLogin');
 
-            if (!user || !pass) { msgBox.style.color = '#dc3545'; msgBox.innerText = 'Vui lòng điền đủ thông tin!'; return; }
-            btn.disabled = true; btn.innerText = "XÁC THỰC WHITE-LIST..."; msgBox.innerText = "";
+            if (!user || !pass) {
+                msgBox.style.color = '#dc3545';
+                msgBox.innerText = 'Vui lòng điền đủ thông tin!';
+                return;
+            }
 
-            const payload = { "username": user, "password": pass, "client_time": getClientTime(), "DeviceToken": "emMYBh-1sUq9shk3XNGqQL:APA91bE8HYJwBXwjJv59xcIEPmwPlpngzmMoPVG6J2h7tKEwdyy8tJdBbJ49eD9zyWql6iK_C_3tx9G1NA5AlMyXcXXzNJmeV0Ue5QnIl8veQo7XwtIyExA", "Platform": "ios", "IMEI": crypto.randomUUID().toUpperCase(), "AppId": "20H343", "versionid": "39" };
+            // Lưu lại để dùng cho submitIMEI
+            lastLoginUser = user;
+            lastLoginPass = pass;
+            lastRemember = remember;
+
+            btn.disabled = true;
+            btn.innerText = imeiOverride ? "ĐANG XÁC NHẬN IMEI..." : "XÁC THỰC WHITE-LIST...";
+            msgBox.innerText = "";
+
+            // Payload tối giản — server tự inject version, AppId, DeviceToken
+            const payload = {
+                username: user,
+                password: pass,
+                client_time: getClientTime(),
+                Platform: "ios"
+            };
+            if (imeiOverride) payload.IMEI = imeiOverride;
 
             try {
-                const response = await fetch('/proxy-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payload: payload }) });
+                const response = await fetch('/proxy-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payload })
+                });
                 const result = await response.json();
 
-                if (response.ok && result.success && result.data.token) {
-                    if (remember) {
-                        localStorage.setItem('lge_saved_user', user); localStorage.setItem('lge_saved_pass', pass);
-                    } else {
-                        localStorage.removeItem('lge_saved_user'); localStorage.removeItem('lge_saved_pass');
-                    }
-                    localStorage.setItem('lge_token', result.data.token);
-                    localStorage.setItem('lge_emp_name', result.data.employeeName);
-                    localStorage.setItem('lge_expire_text', result.expireText);
-                    localStorage.setItem('lge_username', user.toLowerCase());
-                    
-                    msgBox.style.color = "#059669"; msgBox.innerText = "Xác thực thành công! Đang chuyển hướng...";
-                    setTimeout(() => { window.location.href = 'index.html'; }, 1000);
-                } else {
-                    msgBox.style.color = "#dc3545"; msgBox.innerText = result.error || "Thông tin xác thực không đúng!";
+                // Server yêu cầu IMEI
+                if (result.needIMEI) {
+                    btn.disabled = false;
+                    btn.innerText = "ĐĂNG NHẬP";
+                    showIMEIModal(result.error);
+                    return;
                 }
-            } catch (error) { msgBox.style.color = "#dc3545"; msgBox.innerText = "Không thể kết nối đến máy chủ Proxy!"; } 
-            finally { btn.disabled = false; btn.innerText = "ĐĂNG NHẬP"; }
+
+                if (response.ok && result.success && result.data && result.data.token) {
+                    // Remember me
+                    if (remember) {
+                        localStorage.setItem('lge_saved_user', user);
+                        localStorage.setItem('lge_saved_pass', pass);
+                    } else {
+                        localStorage.removeItem('lge_saved_user');
+                        localStorage.removeItem('lge_saved_pass');
+                    }
+
+                    // Save session info
+                    localStorage.setItem('lge_token', result.data.token);
+                    localStorage.setItem('lge_emp_name', result.data.employeeName || result.data.username || user);
+                    localStorage.setItem('lge_expire_text', result.expireText || 'Vĩnh viễn');
+                    localStorage.setItem('lge_username', user.toLowerCase());
+
+                    msgBox.style.color = "#059669";
+                    msgBox.innerText = "Xác thực thành công! Đang chuyển hướng...";
+
+                    // Hiển thị version đang dùng (nếu server trả)
+                    if (result.versionInfo) {
+                        console.log(`[LOGIN] Version ${result.versionInfo.appVersion} (build ${result.versionInfo.buildNumber})`);
+                    }
+
+                    setTimeout(() => { window.location.href = 'index.html'; }, 900);
+                } else {
+                    msgBox.style.color = "#dc3545";
+                    let errMsg = result.error;
+                    if (typeof errMsg === 'object') errMsg = errMsg?.messager || errMsg?.message || JSON.stringify(errMsg);
+                    msgBox.innerText = errMsg || "Thông tin xác thực không đúng!";
+                }
+            } catch (error) {
+                msgBox.style.color = "#dc3545";
+                msgBox.innerText = "Không thể kết nối đến máy chủ Proxy!";
+                console.error('[LOGIN ERROR]', error);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "ĐĂNG NHẬP";
+            }
         }
+        window.processLogin = processLogin;
+
+        // ============================================
+        // IMEI MODAL
+        // ============================================
+        function showIMEIModal(errorMsg) {
+            document.getElementById('imeiModal').classList.add('active');
+            document.getElementById('imeiInput').value = '';
+            document.getElementById('imeiError').innerText = errorMsg || '';
+            setTimeout(() => document.getElementById('imeiInput').focus(), 100);
+        }
+
+        function closeIMEIModal() {
+            document.getElementById('imeiModal').classList.remove('active');
+            document.getElementById('imeiInput').value = '';
+            document.getElementById('imeiError').innerText = '';
+        }
+        window.closeIMEIModal = closeIMEIModal;
+
+        async function submitIMEI() {
+            const input = document.getElementById('imeiInput').value.trim().toUpperCase();
+            const errEl = document.getElementById('imeiError');
+            const btn = document.getElementById('btnSubmitIMEI');
+
+            if (!isValidIMEI(input)) {
+                errEl.innerText = "IMEI không hợp lệ. Định dạng: C6598981-5CDA-4819-A0C1-C9D8128F335F";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Đang xác nhận...";
+
+            closeIMEIModal();
+            await processLogin(input);
+
+            btn.disabled = false;
+            btn.innerText = "Xác nhận";
+        }
+        window.submitIMEI = submitIMEI;
     </script>
 </body>
 </html>

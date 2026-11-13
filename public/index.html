@@ -13,6 +13,9 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
 </head>
 <body>
+    <!-- Toast container -->
+    <div id="toastContainer" class="toast-container"></div>
+
     <header class="app-header">
         <div class="user-info">
             <span class="avatar">👤</span>
@@ -25,36 +28,69 @@
     </header>
 
     <main class="app-body">
+        <!-- ==================== TAB UPLOAD ==================== -->
         <div id="tab-upload" class="tab-pane active">
             <div class="card">
                 <div class="card-title">📍 Vị trí & Cửa hàng chấm công</div>
+
                 <div class="form-group">
                     <label>Chọn cửa hàng mục tiêu:</label>
-                    <select id="shopSelect" class="form-control"><option value="">Đang tải danh sách từ LGE...</option></select>
+                    <select id="shopSelect" class="form-control" disabled>
+                        <option value="">⏳ Đang tải danh sách từ LGE...</option>
+                    </select>
+                    <button type="button" id="btnReloadShops" onclick="loadShops()"
+                            style="display:none; margin-top:8px; background:#fff; color:#a50034; border:1.5px solid #a50034; padding:8px 14px; border-radius:10px; font-weight:700; font-size:12px; cursor:pointer;">
+                        🔄 Tải lại danh sách
+                    </button>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Điểm neo tùy chỉnh (Không bắt buộc - Dán từ Google Maps):</label>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="customAnchorInput" class="form-control" placeholder="Ví dụ: 21.209910, 106.093918" style="margin-bottom: 0; flex: 1;">
-                        <button type="button" id="btnRandomGps" style="background: #a50034; color: white; border: none; padding: 0 15px; border-radius: 10px; font-weight: bold; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 6px rgba(165,0,52,0.2);">Xoay vị trí</button>
+                        <input type="text" id="customAnchorInput" class="form-control"
+                               placeholder="Ví dụ: 21.209910, 106.093918"
+                               style="margin-bottom: 0; flex: 1;">
+                        <button type="button" id="btnRandomGps"
+                                style="background: #a50034; color: white; border: none; padding: 0 15px; border-radius: 10px; font-weight: bold; font-size: 13px; white-space: nowrap; box-shadow: 0 2px 6px rgba(165,0,52,0.2);">
+                            Xoay vị trí
+                        </button>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label>Khoảng cách kiểm thử đến cửa hàng gốc:</label>
-                    <div id="distanceDisplay" style="font-size: 13px; font-weight: 700; color: #4b5563; background: #f3f4f6; padding: 12px; border-radius: 10px; text-align: center; border: 1px solid #e5e7eb;">
+                    <div id="distanceDisplay"
+                         style="font-size: 13px; font-weight: 700; color: #4b5563; background: #f3f4f6; padding: 12px; border-radius: 10px; text-align: center; border: 1px solid #e5e7eb;">
                         Chưa tính toán (Hãy chọn shop và bấm Xoay vị trí)
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label>Loại báo cáo hiện tại (Hệ thống tự động nội suy):</label>
-                    <input type="text" id="photoTypeDisplay" class="form-control" value="⏳ Đang phân tích lịch sử..." disabled style="background: #fff5f7; font-weight: bold; color: #a50034; border: 1px solid #f5b3c3;">
+                    <label>Độ chính xác GPS sẽ gửi:</label>
+                    <div id="accuracyDisplay"
+                         style="font-size: 13px; font-weight: 700; color: #4b5563; background: #f3f4f6; padding: 12px; border-radius: 10px; text-align: center; border: 1px solid #e5e7eb;">
+                        Bấm <b>[Xoay vị trí]</b> để sinh Accuracy
+                    </div>
                 </div>
+
+                <div class="form-group">
+                    <label>Loại báo cáo hiện tại (Hệ thống tự động nội suy):</label>
+                    <input type="text" id="photoTypeDisplay" class="form-control"
+                           value="⏳ Đang phân tích lịch sử..." disabled
+                           style="background: #fff5f7; font-weight: bold; color: #a50034; border: 1px solid #f5b3c3;">
+                </div>
+
                 <div class="form-row">
-                    <div class="form-group"><label>Vĩ độ SẼ GỬI (Lat):</label><input type="number" step="any" id="lat" class="form-control" readonly style="background:#e9ecef; color:#222; font-weight: bold;"></div>
-                    <div class="form-group"><label>Kinh độ SẼ GỬI (Lng):</label><input type="number" step="any" id="lng" class="form-control" readonly style="background:#e9ecef; color:#222; font-weight: bold;"></div>
+                    <div class="form-group">
+                        <label>Vĩ độ SẼ GỬI (Lat):</label>
+                        <input type="number" step="any" id="lat" class="form-control" readonly
+                               style="background:#e9ecef; color:#222; font-weight: bold;">
+                    </div>
+                    <div class="form-group">
+                        <label>Kinh độ SẼ GỬI (Lng):</label>
+                        <input type="number" step="any" id="lng" class="form-control" readonly
+                               style="background:#e9ecef; color:#222; font-weight: bold;">
+                    </div>
                 </div>
             </div>
 
@@ -66,13 +102,32 @@
                         <div>Bấm vào đây để chọn tệp hình ảnh</div>
                     </label>
                     <input type="file" id="imageInput" accept="image/jpeg, image/png, image/jpg" style="display: none;">
-                    <div id="fileNameDisplay" style="text-align: center; margin-top: 10px; font-size: 12px; color: #a50034; font-weight: bold;"></div>
+                    <div id="fileNameDisplay"
+                         style="text-align: center; margin-top: 10px; font-size: 12px; color: #a50034; font-weight: bold;"></div>
+
+                    <div id="imagePreview" style="display:none; text-align:center; margin-top:10px;">
+                        <img id="previewImg"
+                             style="max-width:220px; max-height:220px; border-radius:12px; border:2px solid #f5b3c3; object-fit:cover;">
+                        <div style="margin-top:8px;">
+                            <button type="button" onclick="clearImage()"
+                                    style="background:#fff; color:#a50034; border:1.5px solid #a50034; padding:8px 16px; border-radius:20px; font-weight:700; font-size:12px; cursor:pointer;">
+                                ✕ Xóa ảnh
+                            </button>
+                        </div>
+                    </div>
                 </div>
+
                 <button id="btnSubmit" class="btn-primary">🚀 GỬI DỮ LIỆU LÊN MÁY CHỦ</button>
+                <button id="btnRetry"
+                        style="display:none; width:100%; margin-top:10px; background:#fff; color:#a50034; border:2px solid #a50034; padding:13px; border-radius:12px; font-size:15px; font-weight:bold; cursor:pointer; transition:0.2s;">
+                    🔄 Thử Lại Gửi Dữ Liệu
+                </button>
             </div>
+
             <div class="log-terminal" id="logBox">Hệ thống đang chạy môi trường Sandbox...</div>
         </div>
 
+        <!-- ==================== TAB HISTORY ==================== -->
         <div id="tab-history" class="tab-pane">
             <div class="history-header">
                 <h3>Nhật ký làm việc hôm nay</h3>
@@ -84,12 +139,15 @@
 
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="switchTab('tab-upload', this)">
-            <div class="nav-icon">📤</div><div class="nav-label">Báo Cáo</div>
+            <div class="nav-icon">📤</div>
+            <div class="nav-label">Báo Cáo</div>
         </div>
         <div class="nav-item" onclick="switchTab('tab-history', this)">
-            <div class="nav-icon">🕒</div><div class="nav-label">Lịch Sử</div>
+            <div class="nav-icon">🕒</div>
+            <div class="nav-label">Lịch Sử</div>
         </div>
     </nav>
+
     <script src="app.js"></script>
 </body>
 </html>

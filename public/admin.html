@@ -6,14 +6,17 @@
     <title>LGE Admin Panel</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #333;}
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         h2 { color: #a50034; margin-top: 0; text-align: center;}
         .login-section { text-align: center; padding: 50px 0; }
         .dashboard-section { display: none; }
         input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 8px; font-size: 13px;}
         button { padding: 8px 12px; background: #a50034; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;}
+        button:disabled { background: #ccc; cursor: not-allowed; }
         .btn-danger { background: #dc3545; }
         .btn-warning { background: #ffc107; color: #333; }
+        .btn-edit { background: #0066cc; }
+        .btn-extend { background: #28a745; padding: 4px 8px; font-size: 11px; margin: 1px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;}
         th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top;}
         th { background: #fafafa; font-weight: 600; }
@@ -23,23 +26,64 @@
         .highlight-duplicate-token { background: #f8d7da; }
         .no-device { color: #999; font-style: italic; }
         #statsBox { margin: 10px 0; font-size: 13px; font-weight: 600; }
-        #searchInput { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; }
+        #searchInput { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; box-sizing: border-box;}
+        .add-form { background: #fff8fa; padding: 12px; border-radius: 8px; border: 1px solid #f5b3c3; margin-bottom: 12px; display: grid; grid-template-columns: 1fr 1.5fr 1fr auto; gap: 8px; align-items: end;}
+        .add-form label { font-size: 11px; font-weight: 700; color: #666; display: block; margin-bottom: 4px;}
+        .add-form input { width: 100%; margin-bottom: 0; box-sizing: border-box;}
+        .extend-cell { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px;}
+
+        /* Toast */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; color: white; box-shadow: 0 6px 20px rgba(0,0,0,0.15); animation: toastIn 0.3s; max-width: 350px;}
+        .toast-success { background: #059669; }
+        .toast-error { background: #dc3545; }
+        .toast-out { animation: toastOut 0.35s forwards; }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateX(20px); } }
+
+        /* Modal */
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-bg.active { display: flex; }
+        .modal { background: white; padding: 24px; border-radius: 12px; max-width: 420px; width: 90%; }
+        .modal h3 { margin: 0 0 15px; color: #a50034; font-size: 16px; }
+        .modal label { display: block; font-size: 12px; font-weight: 700; color: #555; margin-bottom: 4px; margin-top: 10px;}
+        .modal input { width: 100%; box-sizing: border-box; padding: 10px; }
+        .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end;}
+        .modal-actions button { padding: 10px 18px; }
+        .btn-cancel { background: #6c757d; }
     </style>
 </head>
 <body>
+<div class="toast-container" id="toastContainer"></div>
+
 <div class="container">
     <h2>⚙️ LGE ADMIN PANEL - DEVICE MANAGEMENT</h2>
-    
+
     <div class="login-section" id="loginSection">
         <p>Nhập mật khẩu Master Admin:</p>
         <input type="password" id="adminPass" placeholder="Mật khẩu..." onkeyup="if(event.keyCode==13) loginAdmin()">
-        <button onclick="loginAdmin()">Đăng nhập</button>
+        <button id="btnLoginAdmin" onclick="loginAdmin()">Đăng nhập</button>
     </div>
 
     <div class="dashboard-section" id="dashboardSection">
+        <div class="add-form">
+            <div>
+                <label>Username *</label>
+                <input type="text" id="newUsername" placeholder="ví dụ: nv001">
+            </div>
+            <div>
+                <label>Ghi chú</label>
+                <input type="text" id="newNote" placeholder="Tên nhân viên / khu vực...">
+            </div>
+            <div>
+                <label>Hạn dùng (trống = vĩnh viễn)</label>
+                <input type="date" id="newExpiresAt">
+            </div>
+            <button onclick="addTester()" id="btnAddTester">➕ Thêm Tester</button>
+        </div>
 
         <div id="statsBox"></div>
-        <input type="text" id="searchInput" placeholder="🔎 Tìm kiếm username...">
+        <input type="text" id="searchInput" placeholder="🔎 Tìm username / ghi chú / IMEI...">
 
         <table>
             <thead>
@@ -60,121 +104,306 @@
     </div>
 </div>
 
+<!-- Modal Edit -->
+<div class="modal-bg" id="editModal">
+    <div class="modal">
+        <h3>Sửa Tester: <span id="editUsernameLabel"></span></h3>
+        <label>Ghi chú</label>
+        <input type="text" id="editNote">
+        <label>Hạn dùng (trống = vĩnh viễn)</label>
+        <input type="date" id="editExpiresAt">
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeEditModal()">Hủy</button>
+            <button onclick="saveEditTester()">💾 Lưu</button>
+        </div>
+    </div>
+</div>
+
 <script>
 let adminPassword = "";
+let testersCache = [];
+let editingUsername = null;
 
-function loginAdmin() {
-    adminPassword = document.getElementById('adminPass').value;
-    if(adminPassword) {
+function toMillis(v) {
+    if (v == null) return null;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+        const n = Number(v);
+        if (!Number.isNaN(n) && n > 0) return n;
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? null : d.getTime();
+    }
+    if (v._seconds != null) return v._seconds * 1000;
+    if (v.seconds != null) return v.seconds * 1000;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    return null;
+}
+
+function toast(msg, type = 'success') {
+    const c = document.getElementById('toastContainer');
+    const t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.innerText = msg;
+    c.appendChild(t);
+    setTimeout(() => {
+        t.classList.add('toast-out');
+        setTimeout(() => t.remove(), 350);
+    }, 3000);
+}
+
+async function loginAdmin() {
+    const pwd = document.getElementById('adminPass').value.trim();
+    if (!pwd) return toast('Vui lòng nhập mật khẩu.', 'error');
+
+    const btn = document.getElementById('btnLoginAdmin');
+    btn.disabled = true; btn.innerText = 'Đang xác thực...';
+    try {
+        const res = await fetch('/admin/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ admin_pass: pwd })
+        });
+        const result = await res.json();
+        if (!result.success) return toast(result.error || 'Sai mật khẩu!', 'error');
+
+        adminPassword = pwd;
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('dashboardSection').style.display = 'block';
         loadTesters();
+    } catch (e) {
+        toast('Không kết nối được server.', 'error');
+    } finally {
+        btn.disabled = false; btn.innerText = 'Đăng nhập';
+    }
+}
+window.loginAdmin = loginAdmin;
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('searchInput').addEventListener('keyup', function () {
+        const filter = this.value.toLowerCase();
+        document.querySelectorAll('#testersTableBody tr').forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(filter) ? '' : 'none';
+        });
+    });
+});
+
+async function loadTesters() {
+    try {
+        const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
+        const result = await res.json();
+        if (!result.success) {
+            toast(result.error || 'Lỗi tải dữ liệu.', 'error');
+            if (res.status === 401) setTimeout(() => location.reload(), 1500);
+            return;
+        }
+
+        testersCache = result.data || [];
+        const tbody = document.getElementById('testersTableBody');
+        tbody.innerHTML = '';
+
+        const now = Date.now();
+        let activeCount = 0, expiredCount = 0, deviceCount = 0;
+        const imeiMap = {}, tokenMap = {};
+
+        testersCache.forEach(u => {
+            if (u.imei) {
+                deviceCount++;
+                imeiMap[u.imei] = (imeiMap[u.imei] || 0) + 1;
+                tokenMap[u.deviceToken] = (tokenMap[u.deviceToken] || 0) + 1;
+            }
+            const exp = toMillis(u.expiresAt);
+            if (exp != null && now > exp) expiredCount++;
+            else activeCount++;
+        });
+
+        document.getElementById('statsBox').innerText =
+            `Tổng: ${testersCache.length} | 🟢 Hoạt động: ${activeCount} | 🔴 Hết hạn: ${expiredCount} | 📱 Có device: ${deviceCount}`;
+
+        testersCache.forEach(u => {
+            const addedMs = toMillis(u.addedAt);
+            const expMs = toMillis(u.expiresAt);
+            const addedStr = addedMs ? new Date(addedMs).toLocaleDateString('vi-VN') : '-';
+
+            let expireStr = 'Vĩnh viễn';
+            let statusBadge = `<span class="badge-active">Đang chạy</span>`;
+            if (expMs != null) {
+                expireStr = new Date(expMs).toLocaleDateString('vi-VN');
+                if (now > expMs) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
+            }
+
+            const imeiClass = u.imei && imeiMap[u.imei] > 1 ? 'highlight-duplicate-imei' : '';
+            const tokenClass = u.deviceToken && tokenMap[u.deviceToken] > 1 ? 'highlight-duplicate-token' : '';
+            const devCreatedMs = toMillis(u.deviceCreatedAt);
+            const devCreatedStr = devCreatedMs ? new Date(devCreatedMs).toLocaleDateString('vi-VN') : '-';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td style="color:#a50034; font-weight:bold;">${u.username}</td>
+                    <td>${u.note || '-'}</td>
+                    <td class="${imeiClass}">${u.imei || "<span class='no-device'>Chưa có</span>"}</td>
+                    <td class="${tokenClass}" style="word-break:break-all;">${u.deviceToken || '-'}</td>
+                    <td>${devCreatedStr}</td>
+                    <td>${addedStr}</td>
+                    <td><b>${expireStr}</b></td>
+                    <td>${statusBadge}</td>
+                    <td style="min-width:220px;">
+                        <button class="btn-edit" onclick="openEditModal('${u.username}')">Sửa</button>
+                        <button class="btn-warning" onclick="resetDevice('${u.username}')">Reset</button>
+                        <button class="btn-danger" onclick="removeTester('${u.username}')">Xóa</button>
+                        <div class="extend-cell">
+                            <button class="btn-extend" onclick="extendTester('${u.username}', 7)">+7d</button>
+                            <button class="btn-extend" onclick="extendTester('${u.username}', 30)">+30d</button>
+                            <button class="btn-extend" onclick="extendTester('${u.username}', 90)">+90d</button>
+                        </div>
+                    </td>
+                </tr>`;
+        });
+    } catch (e) {
+        toast('Lỗi kết nối: ' + e.message, 'error');
     }
 }
 
-async function loadTesters() {
-    const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
-    const result = await res.json();
-    if (!result.success) { alert(result.error); location.reload(); return; }
+async function addTester() {
+    const username = document.getElementById('newUsername').value.trim();
+    const note = document.getElementById('newNote').value.trim();
+    const expiresAtRaw = document.getElementById('newExpiresAt').value;
 
-    const tbody = document.getElementById('testersTableBody');
-    tbody.innerHTML = "";
+    if (!username) return toast('Username không được rỗng.', 'error');
 
-    const now = new Date().getTime();
-    let activeCount = 0;
-    let expiredCount = 0;
-    let deviceCount = 0;
+    let expiresAt = null;
+    if (expiresAtRaw) {
+        const ms = new Date(expiresAtRaw + 'T23:59:59').getTime();
+        if (Number.isNaN(ms)) return toast('Ngày không hợp lệ.', 'error');
+        expiresAt = ms;
+    }
 
-    const imeiMap = {};
-    const tokenMap = {};
+    const btn = document.getElementById('btnAddTester');
+    btn.disabled = true; btn.innerText = 'Đang thêm...';
 
-    result.data.forEach(user => {
-        if (user.imei) {
-            deviceCount++;
-            imeiMap[user.imei] = (imeiMap[user.imei] || 0) + 1;
-            tokenMap[user.deviceToken] = (tokenMap[user.deviceToken] || 0) + 1;
-        }
-
-        if (user.expiresAt && now > user.expiresAt) expiredCount++;
-        else activeCount++;
-    });
-
-    document.getElementById('statsBox').innerText =
-        `Tổng: ${result.data.length} | 🟢 Hoạt động: ${activeCount} | 🔴 Hết hạn: ${expiredCount} | 📱 Có device: ${deviceCount}`;
-
-    result.data.forEach(user => {
-        const addedStr = new Date(user.addedAt).toLocaleDateString('vi-VN');
-        let expireStr = "Vĩnh viễn";
-        let statusBadge = `<span class="badge-active">Đang chạy</span>`;
-
-        if (user.expiresAt) {
-            expireStr = new Date(user.expiresAt).toLocaleDateString('vi-VN');
-            if (now > user.expiresAt) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
-        }
-
-        let imeiClass = "";
-        let tokenClass = "";
-
-        if (user.imei && imeiMap[user.imei] > 1) imeiClass = "highlight-duplicate-imei";
-        if (user.deviceToken && tokenMap[user.deviceToken] > 1) tokenClass = "highlight-duplicate-token";
-
-        tbody.innerHTML += `
-        <tr>
-            <td style="color:#a50034; font-weight:bold;">${user.username}</td>
-            <td>${user.note || "-"}</td>
-            <td class="${imeiClass}">
-                ${user.imei ? user.imei : "<span class='no-device'>Chưa có</span>"}
-            </td>
-            <td class="${tokenClass}" style="word-break:break-all;">
-                ${user.deviceToken || "-"}
-            </td>
-            <td>
-                ${user.deviceCreatedAt ? new Date(user.deviceCreatedAt).toLocaleDateString('vi-VN') : "-"}
-            </td>
-            <td>${addedStr}</td>
-            <td><b>${expireStr}</b></td>
-            <td>${statusBadge}</td>
-            <td>
-                <button class="btn-danger" onclick="removeTester('${user.username}')">Xóa</button>
-                <button class="btn-warning" onclick="resetDevice('${user.username}')">Reset Device</button>
-            </td>
-        </tr>
-        `;
-    });
-
-    document.getElementById('searchInput').addEventListener('keyup', function () {
-        const filter = this.value.toLowerCase();
-        document.querySelectorAll("#testersTableBody tr").forEach(row => {
-            row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
+    try {
+        const res = await fetch('/admin/testers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ username, note, expiresAt })
         });
-    });
+        const result = await res.json();
+        if (result.success) {
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newNote').value = '';
+            document.getElementById('newExpiresAt').value = '';
+            toast(result.message || 'Thêm thành công!', 'success');
+            loadTesters();
+        } else {
+            toast(result.error || 'Lỗi thêm tester.', 'error');
+        }
+    } catch (e) {
+        toast('Lỗi kết nối.', 'error');
+    } finally {
+        btn.disabled = false; btn.innerText = '➕ Thêm Tester';
+    }
 }
+window.addTester = addTester;
+
+function openEditModal(username) {
+    const t = testersCache.find(x => x.username === username);
+    if (!t) return;
+    editingUsername = username;
+    document.getElementById('editUsernameLabel').innerText = username;
+    document.getElementById('editNote').value = t.note || '';
+    const expMs = toMillis(t.expiresAt);
+    document.getElementById('editExpiresAt').value = expMs ? new Date(expMs).toISOString().slice(0, 10) : '';
+    document.getElementById('editModal').classList.add('active');
+}
+window.openEditModal = openEditModal;
+
+function closeEditModal() {
+    editingUsername = null;
+    document.getElementById('editModal').classList.remove('active');
+}
+window.closeEditModal = closeEditModal;
+
+async function saveEditTester() {
+    if (!editingUsername) return;
+    const note = document.getElementById('editNote').value.trim();
+    const dateStr = document.getElementById('editExpiresAt').value;
+
+    const payload = { note };
+    if (dateStr.trim() === '') {
+        payload.expiresAt = null;
+    } else {
+        const ms = new Date(dateStr + 'T23:59:59').getTime();
+        if (Number.isNaN(ms)) return toast('Ngày không hợp lệ.', 'error');
+        payload.expiresAt = ms;
+    }
+
+    try {
+        const res = await fetch(`/admin/testers/${encodeURIComponent(editingUsername)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.success) {
+            toast('Đã cập nhật tester.', 'success');
+            closeEditModal();
+            loadTesters();
+        } else {
+            toast(result.error, 'error');
+        }
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
+}
+window.saveEditTester = saveEditTester;
+
+async function extendTester(username, days) {
+    const t = testersCache.find(x => x.username === username);
+    if (!t) return;
+
+    const currentExp = toMillis(t.expiresAt);
+    const base = currentExp && currentExp > Date.now() ? currentExp : Date.now();
+    const newExp = base + days * 24 * 60 * 60 * 1000;
+
+    if (!confirm(`Gia hạn "${username}" thêm ${days} ngày?\nHạn mới: ${new Date(newExp).toLocaleDateString('vi-VN')}`)) return;
+
+    try {
+        const res = await fetch(`/admin/testers/${encodeURIComponent(username)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ expiresAt: newExp })
+        });
+        const result = await res.json();
+        if (result.success) { toast(`Đã gia hạn +${days} ngày.`, 'success'); loadTesters(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
+}
+window.extendTester = extendTester;
 
 async function resetDevice(username) {
-    if(!confirm(`Reset Device của ${username}?`)) return;
-
-    const res = await fetch(`/admin/devices/${username}`, {
-        method: 'DELETE',
-        headers: { 'admin_pass': adminPassword }
-    });
-
-    const result = await res.json();
-    if(result.success) loadTesters();
-    else alert(result.error);
+    if (!confirm(`Reset Device của "${username}"?`)) return;
+    try {
+        const res = await fetch(`/admin/devices/${encodeURIComponent(username)}`, {
+            method: 'DELETE',
+            headers: { 'admin_pass': adminPassword }
+        });
+        const result = await res.json();
+        if (result.success) { toast(result.message, 'success'); loadTesters(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
 }
+window.resetDevice = resetDevice;
 
 async function removeTester(username) {
-    if(!confirm(`Xóa quyền của ${username}?`)) return;
-
-    const res = await fetch(`/admin/testers/${username}`, {
-        method: 'DELETE',
-        headers: { 'admin_pass': adminPassword }
-    });
-
-    const result = await res.json();
-    if(result.success) loadTesters();
-    else alert(result.error);
+    if (!confirm(`XÓA VĨNH VIỄN "${username}"?\nHành động không thể hoàn tác.`)) return;
+    try {
+        const res = await fetch(`/admin/testers/${encodeURIComponent(username)}`, {
+            method: 'DELETE',
+            headers: { 'admin_pass': adminPassword }
+        });
+        const result = await res.json();
+        if (result.success) { toast(result.message, 'success'); loadTesters(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
 }
+window.removeTester = removeTester;
 </script>
 </body>
 </html>

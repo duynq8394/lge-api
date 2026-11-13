@@ -33,3 +33,53 @@ label { display: block; font-size: 12px; font-weight: 600; color: #555; margin-b
 .nav-item { flex: 1; text-align: center; padding: 12px 0; color: #9ca3af; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s;}
 .nav-item.active { color: #a50034; }
 .nav-icon { font-size: 22px; margin-bottom: 4px; }
+/* ============ FIX #24: Loading shimmer cho select ============ */
+.form-control.loading {
+    background: linear-gradient(90deg, #fafafa 25%, #f0f0f0 50%, #fafafa 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    color: #888;
+    cursor: wait;
+}
+@keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ============ Toast notifications ============ */
+.toast-container {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    max-width: 90vw;
+}
+.toast {
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    animation: toastIn 0.3s ease-out;
+    pointer-events: auto;
+    max-width: 400px;
+    text-align: center;
+}
+.toast-success { background: #059669; }
+.toast-error   { background: #dc3545; }
+.toast-info    { background: #0066cc; }
+.toast-out     { animation: toastOut 0.35s ease-in forwards; }
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastOut {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}

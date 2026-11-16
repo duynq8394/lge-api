@@ -27,7 +27,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (expireText && expireText !== 'undefined') displayName += ` (${expireText})`;
         nameDisplay.innerText = displayName;
     }
+// ─── Avatar ──────────────────────────────────────────────
+    const photoPath = localStorage.getItem('lge_user_photo');
+    const avatarImg = document.getElementById('userAvatarImg');
+    const avatarFallback = document.getElementById('userAvatarFallback');
 
+    if (avatarImg && photoPath && photoPath !== 'undefined' && photoPath !== 'null') {
+        // photoPath dạng "/uploaded/20251110/xxx.jpg" → ghép API_BASE
+        const baseUrl = API_BASE.replace(/\/$/, '');
+        const path = photoPath.startsWith('/') ? photoPath : '/' + photoPath;
+
+        avatarImg.onload = () => {
+            avatarImg.style.display = 'block';
+            if (avatarFallback) avatarFallback.style.display = 'none';
+        };
+        avatarImg.onerror = () => {
+            // Nếu ảnh lỗi 404 (user update ảnh, path cũ) → quay lại emoji
+            avatarImg.style.display = 'none';
+            if (avatarFallback) avatarFallback.style.display = 'flex';
+        };
+        avatarImg.src = baseUrl + path;
+    } else if (avatarFallback) {
+        // Không có photo → giữ emoji mặc định
+        avatarFallback.style.display = 'flex';
+    }
+    // ─────────────────────────────────────────────────────────
     const savedAnchor = localStorage.getItem('lge_custom_anchor');
     if (savedAnchor && document.getElementById('customAnchorInput')) {
         document.getElementById('customAnchorInput').value = savedAnchor;

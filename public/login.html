@@ -236,6 +236,7 @@
                     localStorage.setItem('lge_emp_name', result.data.employeeName || result.data.username || user);
                     localStorage.setItem('lge_expire_text', result.expireText || 'Vĩnh viễn');
                     localStorage.setItem('lge_username', user.toLowerCase());
+                    localStorage.setItem('lge_user_photo', result.data.photo || '');
 
                     msgBox.style.color = "#059669";
                     msgBox.innerText = "Xác thực thành công! Đang chuyển hướng...";

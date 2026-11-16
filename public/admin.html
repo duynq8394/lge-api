@@ -1,202 +1,1060 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LGE Admin Panel</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 20px; color: #333;}
-        .container { max-width: 1400px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        h2 { color: #a50034; margin-top: 0; text-align: center;}
-        h3 { color: #a50034; margin: 16px 0 8px; font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 6px;}
-        .login-section { text-align: center; padding: 50px 0; }
-        .dashboard-section { display: none; }
-        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 6px; outline: none; margin-bottom: 8px; font-size: 13px; box-sizing: border-box;}
-        button { padding: 8px 12px; background: #a50034; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px;}
-        button:disabled { background: #ccc; cursor: not-allowed; }
-        .btn-danger { background: #dc3545; }
-        .btn-warning { background: #ffc107; color: #333; }
-        .btn-edit { background: #0066cc; }
-        .btn-extend { background: #28a745; padding: 4px 8px; font-size: 11px; margin: 1px; }
-        .btn-cancel { background: #6c757d; }
-        .btn-reset { background: #6c757d; }
-        .btn-lge { background: #17a2b8; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;}
-        th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top;}
-        th { background: #fafafa; font-weight: 600; }
-        .badge-active { background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;}
-        .badge-expired { background: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px;}
-        .highlight-duplicate-imei { background: #fff3cd; }
-        .highlight-duplicate-token { background: #f8d7da; }
-        .no-device { color: #999; font-style: italic; }
-        #statsBox { margin: 10px 0; font-size: 13px; font-weight: 600; }
-        #searchInput { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#a50034">
+<title>LGE Admin Panel</title>
+<style>
+/* ============================================================
+   BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f0f2f5;
+    margin: 0;
+    padding: 0;
+    color: #1a1a1a;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-tap-highlight-color: transparent;
+}
 
-        /* VERSION CONFIG */
-        .version-card { background: #f0f8ff; padding: 16px; border-radius: 10px; border: 1px solid #cce5ff; margin-bottom: 16px;}
-        .version-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 2fr; gap: 10px; margin-bottom: 10px;}
-        .version-grid .field label { font-size: 11px; font-weight: 700; color: #555; display: block; margin-bottom: 4px;}
-        .version-grid .field input { width: 100%; margin-bottom: 0; font-family: 'Courier New', monospace;}
-        .version-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center;}
-        .runtime-preview { background: #1e1e1e; color: #4af626; padding: 10px 14px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 12px; margin-top: 12px; line-height: 1.7;}
-        .runtime-preview .label { color: #ffc107; }
-        .runtime-preview .value { color: #4af626; }
-        .runtime-preview .ua { color: #61dafb; word-break: break-all;}
-        .lge-ref { background: #fff3cd; padding: 10px; border-radius: 8px; border: 1px solid #ffc107; font-size: 12px; margin-top: 8px; display: none;}
-        .lge-ref.ok { display: block; background: #d4edda; border-color: #28a745;}
+/* ============================================================
+   LOGIN
+   ============================================================ */
+.login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    background: linear-gradient(135deg, #a50034 0%, #5c001c 100%);
+}
+.login-card {
+    background: white;
+    padding: 32px 24px;
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    width: 100%;
+    max-width: 400px;
+}
+.login-card h1 {
+    color: #a50034;
+    margin: 0 0 6px 0;
+    text-align: center;
+    font-size: 24px;
+}
+.login-card .subtitle {
+    text-align: center;
+    color: #666;
+    margin: 0 0 24px 0;
+    font-size: 13px;
+}
+.login-card input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 16px;
+    margin-bottom: 14px;
+    transition: border 0.2s;
+    background: #fafafa;
+}
+.login-card input:focus {
+    outline: none;
+    border-color: #a50034;
+    background: white;
+}
+.login-card button {
+    width: 100%;
+    padding: 14px;
+    background: #a50034;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 48px;
+    transition: 0.2s;
+}
+.login-card button:active { transform: scale(0.98); }
+.login-card button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .add-form { display: grid; grid-template-columns: 1fr 1.5fr 1fr 1fr auto; gap: 8px; align-items: end; background: #fff8fa; padding: 12px; border-radius: 8px; border: 1px solid #f5b3c3; margin-bottom: 12px;}
-        .add-form label, .modal label { font-size: 11px; font-weight: 700; color: #666; display: block; margin-bottom: 4px;}
-        .add-form input { margin-bottom: 0;}
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+#dashboardSection { display: none; }
 
-        /* Toast */
-        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-        .toast { padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; color: white; box-shadow: 0 6px 20px rgba(0,0,0,0.15); animation: toastIn 0.3s; max-width: 350px;}
-        .toast-success { background: #059669; }
-        .toast-error { background: #dc3545; }
-        .toast-info { background: #0066cc; }
-        .toast-out { animation: toastOut 0.35s forwards; }
-        @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes toastOut { to { opacity: 0; transform: translateX(20px); } }
+.app-header {
+    background: #a50034;
+    color: white;
+    padding: 12px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: max(12px, env(safe-area-inset-top));
+}
+.app-header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+}
+.app-header .logout-btn {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.app-header .logout-btn:active { background: rgba(255,255,255,0.3); }
 
-        /* Modal */
-        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px;}
-        .modal-bg.active { display: flex; }
-        .modal { background: white; padding: 24px; border-radius: 12px; max-width: 480px; width: 100%; }
-        .modal h3 { margin: 0 0 15px; color: #a50034; font-size: 16px; border: none; padding: 0;}
-        .modal input { width: 100%; padding: 10px; margin-bottom: 4px; font-family: 'Courier New', monospace; letter-spacing: 0.5px;}
-        .modal .hint { font-size: 11px; color: #888; margin-bottom: 12px; }
-        .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end;}
-        .modal-actions button { padding: 10px 18px; }
-        #editImeiError { color: #dc3545; font-size: 12px; font-weight: 600; min-height: 16px; }
-    </style>
+/* ============================================================
+   TABS NAV
+   ============================================================ */
+.tabs-nav {
+    display: flex;
+    background: white;
+    border-bottom: 1px solid #e0e0e0;
+    position: sticky;
+    top: 50px;
+    z-index: 99;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.tabs-nav::-webkit-scrollbar { display: none; }
+.tab-btn {
+    flex-shrink: 0;
+    padding: 14px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #666;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: 0.2s;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.tab-btn.active {
+    color: #a50034;
+    border-bottom-color: #a50034;
+    background: #fff5f7;
+}
+
+/* ============================================================
+   CONTENT
+   ============================================================ */
+.content-area {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 14px;
+    padding-bottom: 60px;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; animation: fadeIn 0.2s; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+    background: white;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #a50034;
+    margin: 0 0 14px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.card-desc {
+    font-size: 12px;
+    color: #666;
+    margin: -6px 0 14px 0;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   FORM
+   ============================================================ */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.form-field { display: flex; flex-direction: column; }
+.form-field label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #555;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.form-field input,
+.form-field select,
+.form-field textarea {
+    padding: 12px 14px;
+    border: 1.5px solid #ddd;
+    border-radius: 10px;
+    font-size: 16px;
+    background: #fafafa;
+    width: 100%;
+    transition: 0.2s;
+    font-family: inherit;
+}
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+    outline: none;
+    border-color: #a50034;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(165,0,52,0.08);
+}
+.form-field.mono input,
+.form-field.mono textarea {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+.form-field .hint {
+    font-size: 11px;
+    color: #888;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+.full-width { grid-column: 1 / -1; }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+    padding: 11px 16px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 44px;
+    transition: 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: #a50034; color: white; }
+.btn-secondary { background: #f0f0f0; color: #333; }
+.btn-success { background: #059669; color: white; }
+.btn-danger { background: #dc3545; color: white; }
+.btn-warning { background: #f59e0b; color: white; }
+.btn-info { background: #0891b2; color: white; }
+.btn-sm { padding: 7px 11px; font-size: 12px; min-height: 34px; }
+.btn-xs { padding: 5px 9px; font-size: 11px; min-height: 28px; border-radius: 6px; }
+
+.btn-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ============================================================
+   STATS
+   ============================================================ */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.stat-box {
+    background: white;
+    padding: 14px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    border-top: 3px solid #a50034;
+}
+.stat-box .num {
+    font-size: 26px;
+    font-weight: 800;
+    color: #a50034;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.stat-box .label {
+    font-size: 10px;
+    color: #666;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.stat-box.green { border-top-color: #059669; }
+.stat-box.green .num { color: #059669; }
+.stat-box.red { border-top-color: #dc3545; }
+.stat-box.red .num { color: #dc3545; }
+.stat-box.blue { border-top-color: #0891b2; }
+.stat-box.blue .num { color: #0891b2; }
+
+/* ============================================================
+   RUNTIME PREVIEW
+   ============================================================ */
+.runtime-box {
+    background: #1e1e1e;
+    color: #4af626;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.9;
+    overflow-x: auto;
+    word-break: break-all;
+}
+.runtime-box .key { color: #ffc107; display: inline-block; min-width: 110px; }
+.runtime-box .val { color: #4af626; }
+
+/* ============================================================
+   TABLE (Desktop)
+   ============================================================ */
+.testers-table-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #f0f0f0;
+}
+.testers-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 1000px;
+    background: white;
+}
+.testers-table th {
+    background: #fafafa;
+    font-weight: 700;
+    padding: 10px 8px;
+    text-align: left;
+    border-bottom: 2px solid #e0e0e0;
+    font-size: 11px;
+    color: #555;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.testers-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+.testers-table .username-cell {
+    font-weight: 800;
+    color: #a50034;
+    white-space: nowrap;
+}
+.testers-table .mono {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    word-break: break-all;
+    max-width: 200px;
+}
+.testers-table .actions-cell { min-width: 220px; }
+.testers-table .actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+/* ============================================================
+   CARDS MOBILE (Testers)
+   ============================================================ */
+.testers-cards { display: none; }
+.tester-card {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    border-left: 4px solid #a50034;
+}
+.tester-card.duplicate { border-left-color: #f59e0b; }
+.tester-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.tester-card-name {
+    font-weight: 800;
+    color: #a50034;
+    font-size: 15px;
+    word-break: break-all;
+}
+.tester-card-note {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    margin-bottom: 8px;
+    word-break: break-word;
+}
+.tester-card-row {
+    font-size: 12px;
+    color: #555;
+    padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px dashed #f0f0f0;
+}
+.tester-card-row:last-of-type { border-bottom: none; }
+.tester-card-row b { color: #333; flex-shrink: 0; }
+.tester-card-row span { text-align: right; word-break: break-all; }
+.tester-card-actions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+.badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+.badge-ok { background: #d1fae5; color: #065f46; }
+.badge-warn { background: #fef3c7; color: #92400e; }
+.badge-err { background: #fee2e2; color: #991b1b; }
+.badge-info { background: #dbeafe; color: #1e40af; }
+
+/* ============================================================
+   SEARCH
+   ============================================================ */
+.search-bar {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1.5px solid #ddd;
+    border-radius: 10px;
+    font-size: 16px;
+    margin-bottom: 12px;
+    background: white;
+}
+.search-bar:focus {
+    outline: none;
+    border-color: #a50034;
+    box-shadow: 0 0 0 3px rgba(165,0,52,0.08);
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+}
+.toast {
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    animation: toastIn 0.3s;
+    max-width: 380px;
+    pointer-events: auto;
+}
+.toast-success { background: #059669; }
+.toast-error { background: #dc3545; }
+.toast-info { background: #0891b2; }
+.toast-out { animation: toastOut 0.35s forwards; }
+@keyframes toastIn { from { opacity:0; transform:translateX(20px);} to {opacity:1; transform:translateX(0);} }
+@keyframes toastOut { to { opacity:0; transform:translateX(20px);} }
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.modal-bg {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
+}
+.modal-bg.active { display: flex; }
+.modal {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.25s;
+}
+@keyframes slideUp { from { opacity:0; transform:translateY(20px);} to {opacity:1; transform:translateY(0);} }
+.modal h3 {
+    margin: 0 0 16px;
+    color: #a50034;
+    font-size: 17px;
+}
+.modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+}
+.modal-actions .btn { flex: 1; }
+#editImeiError {
+    color: #dc3545;
+    font-size: 12px;
+    font-weight: 700;
+    min-height: 18px;
+    margin-top: 4px;
+}
+
+/* ============================================================
+   WARNING & INFO BOXES
+   ============================================================ */
+.warn-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-left: 4px solid #ffc107;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #664d03;
+    line-height: 1.6;
+    margin-top: 12px;
+}
+.warn-box ol { margin: 6px 0 0 20px; padding: 0; }
+.warn-box code {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+}
+.info-box {
+    background: #dbeafe;
+    border: 1px solid #60a5fa;
+    border-left: 4px solid #3b82f6;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #1e40af;
+    line-height: 1.6;
+    margin-top: 12px;
+}
+
+/* ============================================================
+   TEST RESULT
+   ============================================================ */
+.test-result-success {
+    background: #d1fae5;
+    border: 1px solid #059669;
+    padding: 14px;
+    border-radius: 10px;
+    color: #065f46;
+    margin-top: 12px;
+}
+.test-result-fail {
+    background: #fee2e2;
+    border: 1px solid #dc3545;
+    padding: 14px;
+    border-radius: 10px;
+    color: #991b1b;
+    margin-top: 12px;
+}
+.test-result-title {
+    font-weight: 800;
+    font-size: 15px;
+    margin-bottom: 10px;
+}
+.test-result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dashed rgba(0,0,0,0.08);
+    font-size: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.test-result-row:last-child { border-bottom: none; }
+.test-diagnosis {
+    background: white;
+    border-left: 3px solid currentColor;
+    padding: 10px 12px;
+    margin-top: 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+.test-error-pre {
+    background: white;
+    padding: 8px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    overflow: auto;
+    max-height: 150px;
+    margin: 4px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+.desktop-only { display: block; }
+.mobile-only { display: none; }
+
+@media (max-width: 767px) {
+    .content-area { padding: 12px; padding-bottom: 80px; }
+    .card { padding: 14px; border-radius: 12px; }
+    .card-title { font-size: 14px; }
+
+    /* Show cards, hide table on mobile */
+    .testers-table-wrap { display: none; }
+    .testers-cards { display: block; }
+
+    /* Stats: 2 cột mobile */
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-box { padding: 12px 8px; }
+    .stat-box .num { font-size: 22px; }
+    .stat-box .label { font-size: 9px; }
+
+    /* Form: 1 cột */
+    .form-grid { grid-template-columns: 1fr; }
+
+    /* Header compact */
+    .app-header { padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top)); }
+    .app-header h1 { font-size: 14px; }
+    .app-header .logout-btn { padding: 6px 12px; font-size: 11px; }
+
+    /* Tab buttons compact */
+    .tab-btn { padding: 12px 14px; font-size: 12px; }
+
+    /* Toast: bottom center */
+    .toast-container { top: auto; bottom: 20px; left: 16px; right: 16px; max-width: none; }
+    .toast { max-width: none; }
+
+    /* Modal full */
+    .modal { padding: 16px; max-height: 95vh; }
+
+    /* Buttons full width in modal */
+    .modal-actions .btn { padding: 12px; }
+
+    .desktop-only { display: none; }
+    .mobile-only { display: block; }
+
+    .btn-row .btn { flex: 1; min-width: 0; }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .content-area { padding: 16px; }
+    .form-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Safe area bottom for iOS */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .content-area { padding-bottom: max(60px, calc(60px + env(safe-area-inset-bottom))); }
+}
+</style>
 </head>
 <body>
+
 <div class="toast-container" id="toastContainer"></div>
 
-<div class="container">
-    <h2>⚙️ LGE ADMIN PANEL</h2>
-
-    <div class="login-section" id="loginSection">
-        <p>Nhập mật khẩu Master Admin:</p>
-        <input type="password" id="adminPass" placeholder="Mật khẩu..." onkeyup="if(event.keyCode==13) loginAdmin()">
+<!-- ============================================================
+     LOGIN SCREEN
+     ============================================================ -->
+<div class="login-screen" id="loginSection">
+    <div class="login-card">
+        <h1>⚙️ LGE Admin</h1>
+        <p class="subtitle">Nhập mật khẩu quản trị viên</p>
+        <input type="password" id="adminPass" placeholder="Mật khẩu..."
+               onkeyup="if(event.keyCode==13) loginAdmin()" autocomplete="current-password">
         <button id="btnLoginAdmin" onclick="loginAdmin()">Đăng nhập</button>
-    </div>
-
-    <div class="dashboard-section" id="dashboardSection">
-
-        <!-- VERSION & BUILD CONFIG -->
-        <h3>📱 Cấu hình App Version & Build Number</h3>
-        <div class="version-card">
-            <div class="version-grid">
-                <div class="field">
-                    <label>App Version (X.Y.Z) *</label>
-                    <input type="text" id="appVersionInput" placeholder="1.4.3">
-                </div>
-                <div class="field">
-                    <label>Build Number (số) *</label>
-                    <input type="text" id="buildNumberInput" placeholder="43">
-                </div>
-                <div class="field">
-                    <label>App ID</label>
-                    <input type="text" id="appIdInput" placeholder="20H343">
-                </div>
-                <div class="field">
-                    <label>User-Agent (để trống = auto)</label>
-                    <input type="text" id="userAgentInput" placeholder="Để trống → fieldforce/{build} CFNetwork/...">
-                </div>
-            </div>
-
-            <div class="version-actions">
-                <button onclick="saveVersion()" id="btnSaveVersion">💾 Lưu cấu hình</button>
-                <button class="btn-reset" onclick="resetVersion()">↺ Reset về mặc định</button>
-                <button class="btn-lge" onclick="checkLgeVersion()" id="btnCheckLge">🌐 Check LGE version</button>
-            </div>
-
-            <div id="lgeRef" class="lge-ref"></div>
-
-            <div class="runtime-preview">
-                <div><span class="label">▶ Đang áp dụng runtime:</span></div>
-                <div>  <span class="label">getVersion  </span>= <span class="value" id="rtAppVersion">-</span></div>
-                <div>  <span class="label">versionid   </span>= <span class="value" id="rtBuildNumber">-</span></div>
-                <div>  <span class="label">AppId       </span>= <span class="value" id="rtAppId">-</span></div>
-                <div>  <span class="label">User-Agent  </span>= <span class="ua" id="rtUserAgent">-</span></div>
-            </div>
-        </div>
-
-        <!-- ADD TESTER -->
-        <h3>➕ Thêm Tester</h3>
-        <div class="add-form">
-            <div>
-                <label>Username *</label>
-                <input type="text" id="newUsername" placeholder="nv001">
-            </div>
-            <div>
-                <label>Ghi chú</label>
-                <input type="text" id="newNote" placeholder="Tên nhân viên...">
-            </div>
-            <div>
-                <label>Hạn dùng (trống = ∞)</label>
-                <input type="date" id="newExpiresAt">
-            </div>
-            <div>
-                <label>IMEI (tùy chọn)</label>
-                <input type="text" id="newImei" placeholder="C6598981-..." maxlength="36" style="font-family:'Courier New',monospace;">
-            </div>
-            <button onclick="addTester()" id="btnAddTester">➕ Thêm</button>
-        </div>
-
-        <!-- TESTERS LIST -->
-        <div id="statsBox"></div>
-        <input type="text" id="searchInput" placeholder="🔎 Tìm username / ghi chú / IMEI...">
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Username</th>
-                    <th>Ghi chú</th>
-                    <th>IMEI</th>
-                    <th>DeviceToken</th>
-                    <th>Ngày tạo Device</th>
-                    <th>Ngày cấp</th>
-                    <th>Hạn dùng</th>
-                    <th>Trạng thái</th>
-                    <th>Thao tác</th>
-                </tr>
-            </thead>
-            <tbody id="testersTableBody"></tbody>
-        </table>
     </div>
 </div>
 
-<!-- Edit Modal -->
+<!-- ============================================================
+     DASHBOARD
+     ============================================================ -->
+<div id="dashboardSection">
+
+    <header class="app-header">
+        <h1>⚙️ LGE Admin Panel</h1>
+        <button class="logout-btn" onclick="logoutAdmin()">Đăng xuất</button>
+    </header>
+
+    <nav class="tabs-nav">
+        <button class="tab-btn active" onclick="switchAdminTab('tab-overview', this)">
+            📊 Tổng quan
+        </button>
+        <button class="tab-btn" onclick="switchAdminTab('tab-testers', this)">
+            📱 Testers
+        </button>
+        <button class="tab-btn" onclick="switchAdminTab('tab-signing', this)">
+            🔐 Signing
+        </button>
+        <button class="tab-btn" onclick="switchAdminTab('tab-test', this)">
+            🧪 Test
+        </button>
+    </nav>
+
+    <div class="content-area">
+
+        <!-- ============================================================
+             TAB: TỔNG QUAN
+             ============================================================ -->
+        <div id="tab-overview" class="tab-panel active">
+
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-box">
+                    <div class="num" id="statTotal">0</div>
+                    <div class="label">Tổng</div>
+                </div>
+                <div class="stat-box green">
+                    <div class="num" id="statActive">0</div>
+                    <div class="label">Hoạt động</div>
+                </div>
+                <div class="stat-box red">
+                    <div class="num" id="statExpired">0</div>
+                    <div class="label">Hết hạn</div>
+                </div>
+                <div class="stat-box blue">
+                    <div class="num" id="statDevice">0</div>
+                    <div class="label">Có device</div>
+                </div>
+            </div>
+
+            <!-- VERSION CONFIG -->
+            <div class="card">
+                <h2 class="card-title">📱 App Version & Build</h2>
+                <p class="card-desc">Cấu hình này áp dụng cho login và mọi API call. Khi LGE update, chỉ cần đổi ở đây.</p>
+
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label>App Version (X.Y.Z)</label>
+                        <input type="text" id="appVersionInput" placeholder="1.4.3">
+                    </div>
+                    <div class="form-field">
+                        <label>Build Number</label>
+                        <input type="text" id="buildNumberInput" placeholder="43">
+                    </div>
+                    <div class="form-field">
+                        <label>App ID</label>
+                        <input type="text" id="appIdInput" placeholder="20H343">
+                    </div>
+                    <div class="form-field mono">
+                        <label>User-Agent (trống = auto)</label>
+                        <input type="text" id="userAgentInput" placeholder="fieldforce/43 CFNetwork/...">
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="saveVersion()" id="btnSaveVersion">💾 Lưu</button>
+                    <button class="btn btn-secondary" onclick="resetVersion()">↺ Reset</button>
+                    <button class="btn btn-info" onclick="checkLgeVersion()" id="btnCheckLge">🌐 Check LGE</button>
+                </div>
+
+                <div id="lgeRef" style="display:none;margin-top:12px;"></div>
+
+                <div class="runtime-box" style="margin-top:14px;">
+<span class="key">getVersion</span> = <span class="val" id="rtAppVersion">-</span>
+<span class="key">versionid </span> = <span class="val" id="rtBuildNumber">-</span>
+<span class="key">AppId     </span> = <span class="val" id="rtAppId">-</span>
+<span class="key">UserAgent </span> = <span class="val" id="rtUserAgent">-</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ============================================================
+             TAB: TESTERS
+             ============================================================ -->
+        <div id="tab-testers" class="tab-panel">
+
+            <!-- ADD FORM -->
+            <div class="card">
+                <h2 class="card-title">➕ Thêm Tester</h2>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label>Username *</label>
+                        <input type="text" id="newUsername" placeholder="nv001" autocomplete="off">
+                    </div>
+                    <div class="form-field">
+                        <label>Ghi chú</label>
+                        <input type="text" id="newNote" placeholder="Tên nhân viên..." autocomplete="off">
+                    </div>
+                    <div class="form-field">
+                        <label>Hạn dùng (trống = ∞)</label>
+                        <input type="date" id="newExpiresAt">
+                    </div>
+                    <div class="form-field mono">
+                        <label>IMEI (tùy chọn)</label>
+                        <input type="text" id="newImei" placeholder="C6598981-..." maxlength="36" autocomplete="off">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="addTester()" id="btnAddTester" style="width:100%;">➕ Thêm Tester</button>
+            </div>
+
+            <!-- SEARCH + LIST -->
+            <div class="card">
+                <input type="text" class="search-bar" id="searchInput"
+                       placeholder="🔎 Tìm username / ghi chú / IMEI...">
+
+                <!-- Desktop table -->
+                <div class="testers-table-wrap desktop-only">
+                    <table class="testers-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Ghi chú</th>
+                                <th>IMEI</th>
+                                <th>DeviceToken</th>
+                                <th>Ngày tạo</th>
+                                <th>Hạn dùng</th>
+                                <th>Trạng thái</th>
+                                <th>Bundle</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="testersTableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile cards -->
+                <div class="testers-cards" id="testersCards"></div>
+            </div>
+
+        </div>
+
+        <!-- ============================================================
+             TAB: SIGNING
+             ============================================================ -->
+        <div id="tab-signing" class="tab-panel">
+
+            <!-- SIGNING CONFIG -->
+            <div class="card">
+                <h2 class="card-title">🔐 Cấu hình Ký số</h2>
+                <p class="card-desc">Bundle ID, Signing Identity, Algorithm, API URL. Đổi ở đây không cần sửa code.</p>
+
+                <div class="form-grid">
+                    <div class="form-field mono">
+                        <label>Bundle ID *</label>
+                        <input type="text" id="cfgBundleId" placeholder="com.spiral.lgev2">
+                    </div>
+                    <div class="form-field mono">
+                        <label>App Signing Identity *</label>
+                        <input type="text" id="cfgSigningIdentity" placeholder="V24D3T799D.com.spiral.lgev2">
+                    </div>
+                    <div class="form-field mono">
+                        <label>Signature Algorithm</label>
+                        <input type="text" id="cfgSignatureAlgo" placeholder="ecdsa-p256-sha256">
+                    </div>
+                    <div class="form-field mono">
+                        <label>LGE API Base URL</label>
+                        <input type="text" id="cfgLgeBaseUrl" placeholder="https://lgpg-sapi.sucbat.com.vn">
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="saveSigningConfig()" id="btnSaveSigning">💾 Lưu</button>
+                    <button class="btn btn-secondary" onclick="reloadSigningConfig()">↻ Tải lại</button>
+                    <button class="btn btn-danger" onclick="resetAllSigningKeys()">🔄 Reset ALL Keys</button>
+                </div>
+
+                <div class="warn-box">
+                    ⚠️ <b>Khi đổi Bundle ID / Signing Identity:</b>
+                    <ol>
+                        <li>Bấm <b>Lưu</b></li>
+                        <li>Bấm <b>Reset ALL Keys</b></li>
+                        <li>Yêu cầu <b>tất cả user đăng xuất + đăng nhập lại</b></li>
+                    </ol>
+                </div>
+
+                <div class="runtime-box" style="margin-top:14px;">
+<span class="key">bundleId   </span> = <span class="val" id="rtBundleId">-</span>
+<span class="key">identity   </span> = <span class="val" id="rtSigningIdentity">-</span>
+<span class="key">algorithm  </span> = <span class="val" id="rtSignatureAlgo">-</span>
+<span class="key">lgeBaseUrl </span> = <span class="val" id="rtLgeBaseUrl">-</span>
+                </div>
+            </div>
+
+            <!-- DEVICE PROFILE -->
+            <div class="card">
+                <h2 class="card-title">📱 Device Profile</h2>
+                <p class="card-desc">JSON gửi cho <code>/employee/checkdevice</code>. Để trống = dùng iPhone 8 Plus mặc định.</p>
+
+                <div class="form-field mono full-width">
+                    <label>JSON Profile</label>
+                    <textarea id="cfgDeviceProfile" style="min-height:220px;"
+                              placeholder='{"getBrand":"Apple","getModel":"iPhone 8 Plus",...}'></textarea>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-primary" onclick="saveDeviceProfile()">💾 Lưu</button>
+                    <button class="btn btn-secondary" onclick="resetDeviceProfile()">↺ Reset</button>
+                    <button class="btn btn-info" onclick="showDefaultDeviceProfile()">👁 Xem Default</button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ============================================================
+             TAB: TEST
+             ============================================================ -->
+        <div id="tab-test" class="tab-panel">
+
+            <div class="card">
+                <h2 class="card-title">🧪 Test chữ ký LGE</h2>
+                <p class="card-desc">
+                    Gọi thử 1 GET + 1 POST tới LGE để kiểm tra chữ ký hiện tại còn hợp lệ không.
+                    Nếu fail → xem <b>Chẩn đoán</b> để biết cần làm gì.
+                </p>
+
+                <div class="form-grid">
+                    <div class="form-field full-width">
+                        <label>Username (trống = tự chọn user có key)</label>
+                        <input type="text" id="testUsername" list="testUserList"
+                               placeholder="Để trống hoặc nhập username..." autocomplete="off">
+                        <datalist id="testUserList"></datalist>
+                        <div class="hint">Chỉ user có signing key mới test được.</div>
+                    </div>
+                </div>
+
+                <button class="btn btn-info" onclick="testSigning()" id="btnTestSigning" style="width:100%;">
+                    🧪 Test ngay
+                </button>
+
+                <div id="testResult"></div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">ℹ️ Hướng dẫn khi test fail</h2>
+                <div class="info-box">
+                    <b>401 / signature error:</b> Format chữ ký đã đổi. Kiểm tra body encoding, field order, algorithm.<br><br>
+                    <b>401 / token / expired:</b> Token hết hạn — user cần login lại để có probe token mới.<br><br>
+                    <b>Bundle mismatch:</b> User ký với bundleId cũ — bấm "Reset Key" user đó.<br><br>
+                    <b>NET (không kết nối):</b> Đổi LGE Base URL hoặc server đang down.<br><br>
+                    <b>404:</b> Endpoint đổi path — kiểm tra lại LGE update gần nhất.
+                </div>
+            </div>
+
+        </div>
+
+    </div><!-- /content-area -->
+</div><!-- /dashboardSection -->
+
+<!-- ============================================================
+     EDIT MODAL
+     ============================================================ -->
 <div class="modal-bg" id="editModal">
     <div class="modal">
-        <h3>Sửa Tester: <span id="editUsernameLabel"></span></h3>
+        <h3>Sửa Tester</h3>
+        <div style="font-family:'Courier New',monospace;font-weight:700;color:#a50034;margin-bottom:14px;word-break:break-all;"
+             id="editUsernameLabel"></div>
 
-        <label>Ghi chú</label>
-        <input type="text" id="editNote" style="font-family: inherit; letter-spacing: 0;">
+        <div class="form-field" style="margin-bottom:12px;">
+            <label>Ghi chú</label>
+            <input type="text" id="editNote">
+        </div>
 
-        <label>Hạn dùng (trống = vĩnh viễn)</label>
-        <input type="date" id="editExpiresAt" style="font-family: inherit; letter-spacing: 0;">
+        <div class="form-field" style="margin-bottom:12px;">
+            <label>Hạn dùng (trống = vĩnh viễn)</label>
+            <input type="date" id="editExpiresAt">
+        </div>
 
-        <label>IMEI (định dạng UUID)</label>
-        <input type="text" id="editImei" placeholder="C6598981-5CDA-4819-A0C1-C9D8128F335F" maxlength="36" autocomplete="off">
-        <div class="hint">Để trống = giữ IMEI hiện tại. Dùng Reset Device nếu muốn xóa hẳn.</div>
+        <div class="form-field mono" style="margin-bottom:4px;">
+            <label>IMEI (UUID)</label>
+            <input type="text" id="editImei" placeholder="C6598981-5CDA-4819-A0C1-C9D8128F335F"
+                   maxlength="36" autocomplete="off">
+            <div class="hint">Trống = giữ IMEI hiện tại. Dùng Reset nếu muốn xoá hẳn.</div>
+        </div>
         <div id="editImeiError"></div>
 
         <div class="modal-actions">
-            <button class="btn-cancel" onclick="closeEditModal()">Hủy</button>
-            <button onclick="saveEditTester()">💾 Lưu</button>
+            <button class="btn btn-secondary" onclick="closeEditModal()">Hủy</button>
+            <button class="btn btn-primary" onclick="saveEditTester()">💾 Lưu</button>
         </div>
     </div>
 </div>
 
 <script>
+/* ============================================================
+   STATE
+   ============================================================ */
 let adminPassword = "";
 let testersCache = [];
-let editingUsername = null;
 
+/* ============================================================
+   TABS
+   ============================================================ */
+function switchAdminTab(tabId, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+
+    // Lazy load dữ liệu theo tab
+    if (tabId === 'tab-testers') loadTesters();
+    if (tabId === 'tab-signing') reloadSigningConfig();
+    if (tabId === 'tab-test') populateTestUsers();
+    if (tabId === 'tab-overview') loadVersion();
+}
+window.switchAdminTab = switchAdminTab;
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
 function toMillis(v) {
     if (v == null) return null;
     if (typeof v === 'number') return v;
@@ -228,21 +1086,25 @@ function toast(msg, type = 'success') {
     t.className = 'toast toast-' + type;
     t.innerText = msg;
     c.appendChild(t);
-    setTimeout(() => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 350); }, 3000);
+    setTimeout(() => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 350); }, 3500);
 }
 
-document.getElementById('newImei')?.addEventListener('input', function() {
-    const prev = this.value;
-    const f = formatIMEI(prev) || prev.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-    if (f !== prev) this.value = f.slice(0, 36);
+function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+/* IMEI auto-format */
+['newImei', 'editImei'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', function () {
+        const prev = this.value;
+        const f = formatIMEI(prev) || prev.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        if (f !== prev) this.value = f.slice(0, 36);
+    });
 });
 
-document.getElementById('editImei')?.addEventListener('input', function() {
-    const prev = this.value;
-    const f = formatIMEI(prev) || prev.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-    if (f !== prev) this.value = f.slice(0, 36);
-});
-
+/* ============================================================
+   LOGIN
+   ============================================================ */
 async function loginAdmin() {
     const pwd = document.getElementById('adminPass').value.trim();
     if (!pwd) return toast('Vui lòng nhập mật khẩu.', 'error');
@@ -251,54 +1113,80 @@ async function loginAdmin() {
     btn.disabled = true; btn.innerText = 'Đang xác thực...';
     try {
         const res = await fetch('/admin/verify', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ admin_pass: pwd })
         });
         const result = await res.json();
         if (!result.success) return toast(result.error || 'Sai mật khẩu!', 'error');
 
         adminPassword = pwd;
+        localStorage.setItem('lge_admin_pass', pwd);
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('dashboardSection').style.display = 'block';
+
         loadVersion();
         loadTesters();
-    } catch (e) { toast('Không kết nối server.', 'error'); }
-    finally { btn.disabled = false; btn.innerText = 'Đăng nhập'; }
+        reloadSigningConfig();
+        populateTestUsers();
+    } catch (e) {
+        toast('Không kết nối server.', 'error');
+    } finally {
+        btn.disabled = false; btn.innerText = 'Đăng nhập';
+    }
 }
 window.loginAdmin = loginAdmin;
 
+function logoutAdmin() {
+    adminPassword = "";
+    localStorage.removeItem('lge_admin_pass');
+    location.reload();
+}
+window.logoutAdmin = logoutAdmin;
+
+// Auto-login nếu có password lưu
 document.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('lge_admin_pass');
+    if (saved) {
+        document.getElementById('adminPass').value = saved;
+        loginAdmin();
+    }
+
+    // Search filter
     document.getElementById('searchInput').addEventListener('keyup', function () {
         const filter = this.value.toLowerCase();
         document.querySelectorAll('#testersTableBody tr').forEach(row => {
             row.style.display = row.innerText.toLowerCase().includes(filter) ? '' : 'none';
         });
+        document.querySelectorAll('.tester-card').forEach(card => {
+            card.style.display = card.innerText.toLowerCase().includes(filter) ? '' : 'none';
+        });
     });
 });
 
-// ================== VERSION CONFIG ==================
+/* ============================================================
+   VERSION CONFIG
+   ============================================================ */
 async function loadVersion() {
     try {
         const res = await fetch('/admin/config/version', { headers: { 'admin_pass': adminPassword } });
         const result = await res.json();
         if (!result.success) return toast(result.error, 'error');
-
         const d = result.data;
         document.getElementById('appVersionInput').value = d.appVersion || '';
         document.getElementById('buildNumberInput').value = d.buildNumber || '';
         document.getElementById('appIdInput').value = d.appId || '';
         document.getElementById('userAgentInput').value = d.userAgent || '';
-
         renderRuntime(d.runtime);
     } catch (e) { toast('Lỗi tải config.', 'error'); }
 }
 
 function renderRuntime(rt) {
     if (!rt) return;
-    document.getElementById('rtAppVersion').innerText = rt.appVersion;
-    document.getElementById('rtBuildNumber').innerText = rt.buildNumber;
-    document.getElementById('rtAppId').innerText = rt.appId;
-    document.getElementById('rtUserAgent').innerText = rt.userAgent;
+    document.getElementById('rtAppVersion').innerText = rt.appVersion || '-';
+    document.getElementById('rtBuildNumber').innerText = rt.buildNumber || '-';
+    document.getElementById('rtAppId').innerText = rt.appId || '-';
+    document.getElementById('rtUserAgent').innerText = rt.userAgent || '-';
 }
 
 async function saveVersion() {
@@ -307,16 +1195,13 @@ async function saveVersion() {
     const appId = document.getElementById('appIdInput').value.trim();
     const userAgent = document.getElementById('userAgentInput').value.trim();
 
-    if (appVersion && !/^\d+\.\d+\.\d+$/.test(appVersion)) {
-        return toast('App Version phải dạng X.Y.Z (VD: 1.4.3)', 'error');
-    }
-    if (buildNumber && !/^\d+$/.test(buildNumber)) {
-        return toast('Build Number phải là số nguyên (VD: 43)', 'error');
-    }
+    if (appVersion && !/^\d+\.\d+\.\d+$/.test(appVersion))
+        return toast('App Version phải X.Y.Z', 'error');
+    if (buildNumber && !/^\d+$/.test(buildNumber))
+        return toast('Build phải số nguyên', 'error');
 
     const btn = document.getElementById('btnSaveVersion');
     btn.disabled = true; btn.innerText = 'Đang lưu...';
-
     try {
         const res = await fetch('/admin/config/version', {
             method: 'PUT',
@@ -325,20 +1210,16 @@ async function saveVersion() {
         });
         const result = await res.json();
         if (result.success) {
-            toast('Đã lưu cấu hình version.', 'success');
+            toast('Đã lưu version.', 'success');
             renderRuntime(result.runtime);
-            // Cập nhật lại form để phản ánh giá trị đã merge
-            loadVersion();
-        } else {
-            toast(result.error || 'Lỗi lưu.', 'error');
-        }
+        } else toast(result.error || 'Lỗi lưu.', 'error');
     } catch (e) { toast('Lỗi kết nối.', 'error'); }
-    finally { btn.disabled = false; btn.innerText = '💾 Lưu cấu hình'; }
+    finally { btn.disabled = false; btn.innerText = '💾 Lưu'; }
 }
 window.saveVersion = saveVersion;
 
 async function resetVersion() {
-    if (!confirm('Reset toàn bộ config version về mặc định (1.4.3 / 43 / 20H343 / UA auto)?')) return;
+    if (!confirm('Reset version về mặc định (1.4.3 / 43 / 20H343 / UA auto)?')) return;
     try {
         const res = await fetch('/admin/config/version/reset', {
             method: 'POST',
@@ -355,108 +1236,304 @@ async function checkLgeVersion() {
     const btn = document.getElementById('btnCheckLge');
     const box = document.getElementById('lgeRef');
     btn.disabled = true; btn.innerText = 'Đang kiểm tra...';
-    box.className = 'lge-ref';
+    box.style.display = 'none';
 
     try {
         const res = await fetch('/admin/config/version/lge', { headers: { 'admin_pass': adminPassword } });
         const result = await res.json();
+        box.style.display = 'block';
 
         if (result.success) {
-            box.className = 'lge-ref ok';
-            box.innerHTML = `<b>🌐 LGE /public/appver trả về:</b> version <code>${result.data.lgeVersion || 'N/A'}</code>
-                <br><small style="color:#666;">(Chỉ để tham khảo — KHÔNG tự động áp dụng. Bấm "Lưu" để dùng version này.)</small>`;
+            box.className = 'test-result-success';
+            box.innerHTML = `<b>🌐 LGE /public/appver:</b> version <code>${result.data.lgeVersion || 'N/A'}</code>
+                <br><small style="color:#666;">(Chỉ tham khảo — bấm Lưu để áp dụng)</small>`;
             if (result.data.lgeVersion) {
-                // Optional: prefill vào input
-                if (confirm(`LGE hiện đang báo version "${result.data.lgeVersion}".\n\nBạn có muốn điền version này vào form để lưu không?`)) {
+                if (confirm(`LGE báo version "${result.data.lgeVersion}".\nĐiền vào form?`)) {
                     document.getElementById('appVersionInput').value = result.data.lgeVersion;
                 }
             }
         } else {
-            box.className = 'lge-ref';
-            box.style.display = 'block';
-            box.innerHTML = `<b>❌ Không fetch được:</b> ${result.error}<br><small>${result.hint || ''}</small>`;
+            box.className = 'test-result-fail';
+            box.innerHTML = `<b>❌ Không fetch được:</b> ${escapeHTML(result.error || '')}<br><small>${escapeHTML(result.hint || '')}</small>`;
         }
-    } catch (e) {
-        toast('Lỗi kết nối.', 'error');
-    } finally {
-        btn.disabled = false; btn.innerText = '🌐 Check LGE version';
-    }
+    } catch (e) { toast('Lỗi kết nối.', 'error'); }
+    finally { btn.disabled = false; btn.innerText = '🌐 Check LGE'; }
 }
 window.checkLgeVersion = checkLgeVersion;
 
-// ================== TESTERS ==================
+/* ============================================================
+   SIGNING CONFIG
+   ============================================================ */
+async function reloadSigningConfig() {
+    try {
+        const res = await fetch('/admin/config/signing', { headers: { 'admin_pass': adminPassword } });
+        const result = await res.json();
+        if (!result.success) return toast(result.error, 'error');
+        const d = result.data;
+        document.getElementById('cfgBundleId').value = d.bundleId || '';
+        document.getElementById('cfgSigningIdentity').value = d.appSigningIdentity || '';
+        document.getElementById('cfgSignatureAlgo').value = d.signatureAlgorithm || '';
+        document.getElementById('cfgLgeBaseUrl').value = d.lgeBaseUrl || '';
+
+        document.getElementById('rtBundleId').innerText = d.runtime.bundleId;
+        document.getElementById('rtSigningIdentity').innerText = d.runtime.appSigningIdentity;
+        document.getElementById('rtSignatureAlgo').innerText = d.runtime.signatureAlgorithm;
+        document.getElementById('rtLgeBaseUrl').innerText = d.runtime.lgeBaseUrl;
+
+        document.getElementById('cfgDeviceProfile').value =
+            d.runtime.deviceProfile ? JSON.stringify(d.runtime.deviceProfile, null, 2) : '';
+    } catch (e) { toast('Lỗi kết nối: ' + e.message, 'error'); }
+}
+window.reloadSigningConfig = reloadSigningConfig;
+
+async function saveSigningConfig() {
+    const bundleId = document.getElementById('cfgBundleId').value.trim();
+    const appSigningIdentity = document.getElementById('cfgSigningIdentity').value.trim();
+    const signatureAlgorithm = document.getElementById('cfgSignatureAlgo').value.trim();
+    const lgeBaseUrl = document.getElementById('cfgLgeBaseUrl').value.trim();
+
+    const oldBundle = document.getElementById('rtBundleId').innerText;
+    const oldId = document.getElementById('rtSigningIdentity').innerText;
+    const changed = (bundleId && bundleId !== oldBundle) || (appSigningIdentity && appSigningIdentity !== oldId);
+    if (changed && !confirm('Bạn đang đổi Bundle/Signing Identity.\nSau khi lưu PHẢI bấm "Reset ALL Keys" và user login lại.\nTiếp tục?')) return;
+
+    const btn = document.getElementById('btnSaveSigning');
+    btn.disabled = true; btn.innerText = 'Đang lưu...';
+    try {
+        const res = await fetch('/admin/config/signing', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ bundleId, appSigningIdentity, signatureAlgorithm, lgeBaseUrl })
+        });
+        const result = await res.json();
+        if (result.success) {
+            toast('Đã lưu cấu hình ký.', 'success');
+            if (result.warning) setTimeout(() => toast(result.warning, 'info'), 500);
+            reloadSigningConfig();
+        } else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi: ' + e.message, 'error'); }
+    finally { btn.disabled = false; btn.innerText = '💾 Lưu'; }
+}
+window.saveSigningConfig = saveSigningConfig;
+
+async function resetAllSigningKeys() {
+    if (!confirm('⚠️ XOÁ TOÀN BỘ SIGNING KEYS của mọi device?\nUser phải login lại. Không thể hoàn tác.')) return;
+    try {
+        const res = await fetch('/admin/signing/reset-all-keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword }
+        });
+        const result = await res.json();
+        if (result.success) { toast(result.message, 'success'); loadTesters(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+window.resetAllSigningKeys = resetAllSigningKeys;
+
+async function resetUserSigningKey(username) {
+    if (!confirm(`Reset signing key của "${username}"?\nUser phải login lại.`)) return;
+    try {
+        const res = await fetch(`/admin/signing/reset-user/${encodeURIComponent(username)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword }
+        });
+        const result = await res.json();
+        if (result.success) { toast(result.message, 'success'); loadTesters(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+window.resetUserSigningKey = resetUserSigningKey;
+
+async function saveDeviceProfile() {
+    const raw = document.getElementById('cfgDeviceProfile').value.trim();
+    let profile = null;
+    if (raw) {
+        try { profile = JSON.parse(raw); }
+        catch (e) { return toast('JSON không hợp lệ: ' + e.message, 'error'); }
+    }
+    try {
+        const res = await fetch('/admin/config/device-profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ deviceProfile: profile })
+        });
+        const result = await res.json();
+        if (result.success) { toast('Đã lưu device profile.', 'success'); reloadSigningConfig(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+window.saveDeviceProfile = saveDeviceProfile;
+
+async function resetDeviceProfile() {
+    if (!confirm('Reset device profile về mặc định?')) return;
+    try {
+        const res = await fetch('/admin/config/device-profile', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ deviceProfile: null })
+        });
+        const result = await res.json();
+        if (result.success) { toast('Đã reset.', 'success'); reloadSigningConfig(); }
+        else toast(result.error, 'error');
+    } catch (e) { toast('Lỗi: ' + e.message, 'error'); }
+}
+window.resetDeviceProfile = resetDeviceProfile;
+
+async function showDefaultDeviceProfile() {
+    try {
+        const res = await fetch('/admin/config/signing', { headers: { 'admin_pass': adminPassword } });
+        const result = await res.json();
+        if (result.success) {
+            document.getElementById('cfgDeviceProfile').value =
+                JSON.stringify(result.data.defaults.defaultDeviceProfile, null, 2);
+            toast('Đã load default — bấm Lưu nếu muốn dùng.', 'info');
+        }
+    } catch (e) { toast('Lỗi', 'error'); }
+}
+window.showDefaultDeviceProfile = showDefaultDeviceProfile;
+
+/* ============================================================
+   TESTERS LIST
+   ============================================================ */
 async function loadTesters() {
     try {
         const res = await fetch('/admin/testers', { headers: { 'admin_pass': adminPassword } });
         const result = await res.json();
         if (!result.success) {
-            toast(result.error || 'Lỗi tải dữ liệu.', 'error');
+            toast(result.error || 'Lỗi tải.', 'error');
             if (res.status === 401) setTimeout(() => location.reload(), 1500);
             return;
         }
 
         testersCache = result.data || [];
-        const tbody = document.getElementById('testersTableBody');
-        tbody.innerHTML = '';
+        const currentBundle = result.currentBundleId;
 
         const now = Date.now();
-        let activeCount = 0, expiredCount = 0, deviceCount = 0;
-        const imeiMap = {}, tokenMap = {};
+        let active = 0, expired = 0, withDevice = 0;
+        const imeiMap = {};
 
         testersCache.forEach(u => {
             if (u.imei) {
-                deviceCount++;
+                withDevice++;
                 imeiMap[u.imei] = (imeiMap[u.imei] || 0) + 1;
-                tokenMap[u.deviceToken] = (tokenMap[u.deviceToken] || 0) + 1;
             }
             const exp = toMillis(u.expiresAt);
-            if (exp != null && now > exp) expiredCount++;
-            else activeCount++;
+            if (exp != null && now > exp) expired++; else active++;
         });
 
-        document.getElementById('statsBox').innerText =
-            `Tổng: ${testersCache.length} | 🟢 Hoạt động: ${activeCount} | 🔴 Hết hạn: ${expiredCount} | 📱 Có device: ${deviceCount}`;
+        document.getElementById('statTotal').innerText = testersCache.length;
+        document.getElementById('statActive').innerText = active;
+        document.getElementById('statExpired').innerText = expired;
+        document.getElementById('statDevice').innerText = withDevice;
+
+        // Render table (desktop)
+        const tbody = document.getElementById('testersTableBody');
+        tbody.innerHTML = '';
+
+        // Render cards (mobile)
+        const cardsBox = document.getElementById('testersCards');
+        cardsBox.innerHTML = '';
 
         testersCache.forEach(u => {
             const addedMs = toMillis(u.addedAt);
             const expMs = toMillis(u.expiresAt);
             const addedStr = addedMs ? new Date(addedMs).toLocaleDateString('vi-VN') : '-';
             let expireStr = 'Vĩnh viễn';
-            let statusBadge = `<span class="badge-active">Đang chạy</span>`;
+            let statusBadge = '<span class="badge badge-ok">Active</span>';
             if (expMs != null) {
                 expireStr = new Date(expMs).toLocaleDateString('vi-VN');
-                if (now > expMs) statusBadge = `<span class="badge-expired">Hết hạn</span>`;
+                if (now > expMs) statusBadge = '<span class="badge badge-err">Hết hạn</span>';
             }
-            const imeiClass = u.imei && imeiMap[u.imei] > 1 ? 'highlight-duplicate-imei' : '';
-            const tokenClass = u.deviceToken && tokenMap[u.deviceToken] > 1 ? 'highlight-duplicate-token' : '';
-            const devCreatedMs = toMillis(u.deviceCreatedAt);
-            const devCreatedStr = devCreatedMs ? new Date(devCreatedMs).toLocaleDateString('vi-VN') : '-';
+            const dupImei = u.imei && imeiMap[u.imei] > 1;
 
+            const bundleBadge = u.hasSigningKey
+                ? (u.bundleMatch
+                    ? `<span class="badge badge-ok" title="${escapeHTML(u.signedWithBundleId || '')}">✅ OK</span>`
+                    : `<span class="badge badge-warn" title="${escapeHTML(u.signedWithBundleId || '')}">⚠️ Mismatch</span>`)
+                : `<span class="badge badge-info">Chưa có</span>`;
+
+            // ==== TABLE ROW (DESKTOP) ====
             tbody.innerHTML += `
                 <tr>
-                    <td style="color:#a50034; font-weight:bold;">${u.username}</td>
-                    <td>${u.note || '-'}</td>
-                    <td class="${imeiClass}" style="font-family: monospace; font-size: 11px;">${u.imei || "<span class='no-device'>Chưa có</span>"}</td>
-                    <td class="${tokenClass}" style="word-break:break-all; font-size: 11px;">${u.deviceToken || '-'}</td>
-                    <td>${devCreatedStr}</td>
+                    <td class="username-cell">${escapeHTML(u.username)}</td>
+                    <td>${escapeHTML(u.note || '-')}</td>
+                    <td class="mono" style="${dupImei ? 'background:#fff3cd;' : ''}">${u.imei ? escapeHTML(u.imei) : '<i style="color:#999;">Chưa có</i>'}</td>
+                    <td class="mono">${u.deviceToken ? escapeHTML(u.deviceToken.slice(0, 30)) + '...' : '-'}</td>
                     <td>${addedStr}</td>
                     <td><b>${expireStr}</b></td>
                     <td>${statusBadge}</td>
-                    <td style="min-width:220px;">
-                        <button class="btn-edit" onclick="openEditModal('${u.username}')">Sửa</button>
-                        <button class="btn-warning" onclick="resetDevice('${u.username}')">Reset</button>
-                        <button class="btn-danger" onclick="removeTester('${u.username}')">Xóa</button>
-                        <div style="margin-top:3px;">
-                            <button class="btn-extend" onclick="extendTester('${u.username}', 7)">+7d</button>
-                            <button class="btn-extend" onclick="extendTester('${u.username}', 30)">+30d</button>
-                            <button class="btn-extend" onclick="extendTester('${u.username}', 90)">+90d</button>
+                    <td>${bundleBadge}</td>
+                    <td class="actions-cell">
+                        <div class="actions-row">
+                            <button class="btn btn-info btn-xs" onclick="openEditModal('${escapeHTML(u.username)}')">Sửa</button>
+                            <button class="btn btn-warning btn-xs" onclick="resetDevice('${escapeHTML(u.username)}')">Reset</button>
+                            <button class="btn btn-danger btn-xs" onclick="removeTester('${escapeHTML(u.username)}')">Xoá</button>
+                        </div>
+                        <div class="actions-row">
+                            <button class="btn btn-success btn-xs" onclick="extendTester('${escapeHTML(u.username)}', 7)">+7d</button>
+                            <button class="btn btn-success btn-xs" onclick="extendTester('${escapeHTML(u.username)}', 30)">+30d</button>
+                            <button class="btn btn-success btn-xs" onclick="extendTester('${escapeHTML(u.username)}', 90)">+90d</button>
+                            ${u.hasSigningKey && !u.bundleMatch
+                                ? `<button class="btn btn-warning btn-xs" onclick="resetUserSigningKey('${escapeHTML(u.username)}')">Reset Key</button>`
+                                : ''}
                         </div>
                     </td>
                 </tr>`;
+
+            // ==== CARD (MOBILE) ====
+            cardsBox.innerHTML += `
+                <div class="tester-card ${dupImei ? 'duplicate' : ''}">
+                    <div class="tester-card-header">
+                        <div class="tester-card-name">${escapeHTML(u.username)}</div>
+                        ${statusBadge}
+                    </div>
+                    ${u.note ? `<div class="tester-card-note">📝 ${escapeHTML(u.note)}</div>` : ''}
+                    <div class="tester-card-row">
+                        <b>📱 IMEI</b>
+                        <span style="${dupImei ? 'background:#fff3cd;padding:0 4px;border-radius:3px;' : ''}">
+                            ${u.imei ? escapeHTML(u.imei) : '<i style="color:#999;">Chưa có</i>'}
+                        </span>
+                    </div>
+                    <div class="tester-card-row"><b>📅 Ngày cấp</b><span>${addedStr}</span></div>
+                    <div class="tester-card-row"><b>⏰ Hạn dùng</b><span><b>${expireStr}</b></span></div>
+                    <div class="tester-card-row"><b>🔐 Bundle</b><span>${bundleBadge}</span></div>
+                    <div class="tester-card-actions">
+                        <button class="btn btn-info btn-sm" onclick="openEditModal('${escapeHTML(u.username)}')">Sửa</button>
+                        <button class="btn btn-warning btn-sm" onclick="resetDevice('${escapeHTML(u.username)}')">Reset</button>
+                        <button class="btn btn-danger btn-sm" onclick="removeTester('${escapeHTML(u.username)}')">Xoá</button>
+                        <button class="btn btn-success btn-sm" onclick="extendTester('${escapeHTML(u.username)}', 7)">+7d</button>
+                        <button class="btn btn-success btn-sm" onclick="extendTester('${escapeHTML(u.username)}', 30)">+30d</button>
+                        <button class="btn btn-success btn-sm" onclick="extendTester('${escapeHTML(u.username)}', 90)">+90d</button>
+                        ${u.hasSigningKey && !u.bundleMatch
+                            ? `<button class="btn btn-warning btn-sm" onclick="resetUserSigningKey('${escapeHTML(u.username)}')">Reset Key</button>`
+                            : ''}
+                    </div>
+                </div>`;
         });
+
+        populateTestUsers();
     } catch (e) { toast('Lỗi kết nối: ' + e.message, 'error'); }
 }
+window.loadTesters = loadTesters;
 
+function populateTestUsers() {
+    const datalist = document.getElementById('testUserList');
+    if (!datalist) return;
+    datalist.innerHTML = '';
+    testersCache.forEach(t => {
+        if (t.hasSigningKey) {
+            const opt = document.createElement('option');
+            opt.value = t.username;
+            opt.label = t.bundleMatch ? '✅ ' + t.username : '⚠️ ' + t.username;
+            datalist.appendChild(opt);
+        }
+    });
+}
+window.populateTestUsers = populateTestUsers;
+
+/* ============================================================
+   ADD TESTER
+   ============================================================ */
 async function addTester() {
     const username = document.getElementById('newUsername').value.trim();
     const note = document.getElementById('newNote').value.trim();
@@ -464,7 +1541,7 @@ async function addTester() {
     const imei = document.getElementById('newImei').value.trim().toUpperCase();
 
     if (!username) return toast('Username không được rỗng.', 'error');
-    if (imei && !isValidIMEI(imei)) return toast('IMEI không đúng định dạng UUID.', 'error');
+    if (imei && !isValidIMEI(imei)) return toast('IMEI sai định dạng UUID.', 'error');
 
     let expiresAt = null;
     if (expiresAtRaw) {
@@ -489,18 +1566,18 @@ async function addTester() {
             document.getElementById('newImei').value = '';
             toast(result.message || 'Thêm thành công!', 'success');
             loadTesters();
-        } else {
-            toast(result.error || 'Lỗi thêm tester.', 'error');
-        }
+        } else toast(result.error || 'Lỗi thêm.', 'error');
     } catch (e) { toast('Lỗi kết nối.', 'error'); }
-    finally { btn.disabled = false; btn.innerText = '➕ Thêm'; }
+    finally { btn.disabled = false; btn.innerText = '➕ Thêm Tester'; }
 }
 window.addTester = addTester;
 
+/* ============================================================
+   EDIT MODAL
+   ============================================================ */
 function openEditModal(username) {
     const t = testersCache.find(x => x.username === username);
     if (!t) return;
-    editingUsername = username;
     document.getElementById('editUsernameLabel').innerText = username;
     document.getElementById('editNote').value = t.note || '';
     const expMs = toMillis(t.expiresAt);
@@ -508,24 +1585,25 @@ function openEditModal(username) {
     document.getElementById('editImei').value = t.imei || '';
     document.getElementById('editImeiError').innerText = '';
     document.getElementById('editModal').classList.add('active');
+    document.getElementById('editModal').dataset.username = username;
 }
 window.openEditModal = openEditModal;
 
 function closeEditModal() {
-    editingUsername = null;
     document.getElementById('editModal').classList.remove('active');
 }
 window.closeEditModal = closeEditModal;
 
 async function saveEditTester() {
-    if (!editingUsername) return;
+    const username = document.getElementById('editModal').dataset.username;
+    if (!username) return;
     const note = document.getElementById('editNote').value.trim();
     const dateStr = document.getElementById('editExpiresAt').value;
     const imeiRaw = document.getElementById('editImei').value.trim().toUpperCase();
     const errEl = document.getElementById('editImeiError');
 
     if (imeiRaw && !isValidIMEI(imeiRaw)) {
-        errEl.innerText = "IMEI không đúng định dạng UUID";
+        errEl.innerText = 'IMEI sai định dạng UUID';
         return;
     }
     errEl.innerText = '';
@@ -538,11 +1616,11 @@ async function saveEditTester() {
         payload.expiresAt = ms;
     }
 
-    const currentImei = testersCache.find(t => t.username === editingUsername)?.imei || '';
-    if (imeiRaw && imeiRaw !== currentImei) payload.imei = imeiRaw;
+    const cur = testersCache.find(t => t.username === username)?.imei || '';
+    if (imeiRaw && imeiRaw !== cur) payload.imei = imeiRaw;
 
     try {
-        const res = await fetch(`/admin/testers/${encodeURIComponent(editingUsername)}`, {
+        const res = await fetch(`/admin/testers/${encodeURIComponent(username)}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
             body: JSON.stringify(payload)
@@ -554,11 +1632,14 @@ async function saveEditTester() {
 }
 window.saveEditTester = saveEditTester;
 
+/* ============================================================
+   ACTIONS
+   ============================================================ */
 async function extendTester(username, days) {
     const t = testersCache.find(x => x.username === username);
     if (!t) return;
-    const currentExp = toMillis(t.expiresAt);
-    const base = currentExp && currentExp > Date.now() ? currentExp : Date.now();
+    const cur = toMillis(t.expiresAt);
+    const base = cur && cur > Date.now() ? cur : Date.now();
     const newExp = base + days * 86400000;
     if (!confirm(`Gia hạn "${username}" +${days} ngày?\nHạn mới: ${new Date(newExp).toLocaleDateString('vi-VN')}`)) return;
     try {
@@ -575,10 +1656,11 @@ async function extendTester(username, days) {
 window.extendTester = extendTester;
 
 async function resetDevice(username) {
-    if (!confirm(`Reset Device của "${username}"?\nIMEI sẽ bị xóa, user phải nhập IMEI mới khi login.`)) return;
+    if (!confirm(`Reset Device của "${username}"?\nIMEI bị xoá, user phải nhập lại.`)) return;
     try {
         const res = await fetch(`/admin/devices/${encodeURIComponent(username)}`, {
-            method: 'DELETE', headers: { 'admin_pass': adminPassword }
+            method: 'DELETE',
+            headers: { 'admin_pass': adminPassword }
         });
         const result = await res.json();
         if (result.success) { toast(result.message, 'success'); loadTesters(); }
@@ -588,10 +1670,11 @@ async function resetDevice(username) {
 window.resetDevice = resetDevice;
 
 async function removeTester(username) {
-    if (!confirm(`XÓA VĨNH VIỄN "${username}"?\nHành động không thể hoàn tác.`)) return;
+    if (!confirm(`XÓA "${username}"?\nKhông thể hoàn tác.`)) return;
     try {
         const res = await fetch(`/admin/testers/${encodeURIComponent(username)}`, {
-            method: 'DELETE', headers: { 'admin_pass': adminPassword }
+            method: 'DELETE',
+            headers: { 'admin_pass': adminPassword }
         });
         const result = await res.json();
         if (result.success) { toast(result.message, 'success'); loadTesters(); }
@@ -599,6 +1682,90 @@ async function removeTester(username) {
     } catch (e) { toast('Lỗi kết nối.', 'error'); }
 }
 window.removeTester = removeTester;
+
+/* ============================================================
+   TEST SIGNING
+   ============================================================ */
+async function testSigning() {
+    const btn = document.getElementById('btnTestSigning');
+    const box = document.getElementById('testResult');
+    const username = document.getElementById('testUsername').value.trim();
+
+    btn.disabled = true; btn.innerText = '⏳ Đang test...';
+    box.innerHTML = '<div style="color:#666;padding:14px;text-align:center;">⏳ Đang gọi LGE...</div>';
+
+    try {
+        const res = await fetch('/admin/test-signing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'admin_pass': adminPassword },
+            body: JSON.stringify({ username: username || null })
+        });
+        const result = await res.json();
+
+        if (result.success) {
+            const rows = result.tests.map(t => `
+                <div class="test-result-row">
+                    <span>${t.ok ? '✅' : '❌'} <code>${escapeHTML(t.name)}</code></span>
+                    <span style="color:${t.ok ? '#059669' : '#dc3545'};font-weight:800;">
+                        ${t.status || 'NET'} · ${t.duration}ms
+                    </span>
+                </div>`).join('');
+
+            const bundleWarn = !result.bundleMatch ? `
+                <div class="warn-box" style="margin-top:10px;color:#92400e;">
+                    ⚠️ <b>Bundle mismatch:</b>
+                    User ký với <code>${escapeHTML(result.signedWith || '(chưa track)')}</code>,
+                    runtime <code>${escapeHTML(result.bundleId)}</code>.
+                    → Bấm <b>Reset Key</b> user này và login lại.
+                </div>` : '';
+
+            box.innerHTML = `
+                <div class="test-result-success">
+                    <div class="test-result-title">✅ CHỮ KÝ HỢP LỆ</div>
+                    <div class="test-result-row"><span><b>User</b></span><span><code>${escapeHTML(result.user)}</code></span></div>
+                    <div class="test-result-row"><span><b>Bundle runtime</b></span><span><code>${escapeHTML(result.bundleId)}</code></span></div>
+                    <div class="test-result-row"><span><b>Bundle user ký</b></span><span><code>${escapeHTML(result.signedWith || '(chưa track)')}</code></span></div>
+                    <div class="test-result-row"><span><b>Algorithm</b></span><span><code>${escapeHTML(result.algorithm)}</code></span></div>
+                    <div class="test-result-row"><span><b>Tổng</b></span><span>${result.totalDuration}ms</span></div>
+                    <div style="margin-top:10px;">${rows}</div>
+                    <div class="test-diagnosis" style="border-color:#059669;">
+                        <b>Chẩn đoán:</b> ${escapeHTML(result.diagnosis)}
+                    </div>
+                    ${bundleWarn}
+                </div>`;
+        } else {
+            const tests = result.tests ? result.tests.map(t => `
+                <div class="test-result-row">
+                    <span>${t.ok ? '✅' : '❌'} <code>${escapeHTML(t.name)}</code></span>
+                    <span style="color:${t.ok ? '#059669' : '#dc3545'};font-weight:800;">
+                        ${t.status || 'NET'} · ${t.duration}ms
+                    </span>
+                </div>`).join('') : '';
+
+            const errors = result.tests ? result.tests.filter(t => !t.ok && t.error)
+                .map(t => `<div style="margin-top:6px;"><b>${escapeHTML(t.name)}</b><pre class="test-error-pre">${escapeHTML(t.error)}</pre></div>`).join('') : '';
+
+            box.innerHTML = `
+                <div class="test-result-fail">
+                    <div class="test-result-title">❌ TEST THẤT BẠI</div>
+                    ${result.user ? `<div class="test-result-row"><span><b>User</b></span><span><code>${escapeHTML(result.user)}</code></span></div>` : ''}
+                    ${tests ? `<div style="margin-top:8px;">${tests}</div>` : ''}
+                    ${result.diagnosis ? `<div class="test-diagnosis" style="border-color:#dc3545;"><b>Chẩn đoán:</b> ${escapeHTML(result.diagnosis)}</div>` : ''}
+                    ${result.error ? `<div class="test-diagnosis" style="border-color:#dc3545;"><b>Lỗi:</b> ${escapeHTML(typeof result.error === 'object' ? JSON.stringify(result.error) : result.error)}</div>` : ''}
+                    ${errors ? `<div style="margin-top:10px;">${errors}</div>` : ''}
+                    ${result.hint ? `<div class="hint" style="margin-top:8px;font-size:11px;">${escapeHTML(result.hint)}</div>` : ''}
+                </div>`;
+        }
+    } catch (e) {
+        box.innerHTML = `<div class="test-result-fail">
+            <div class="test-result-title">❌ Lỗi kết nối</div>
+            <div>${escapeHTML(e.message)}</div>
+        </div>`;
+    } finally {
+        btn.disabled = false; btn.innerText = '🧪 Test ngay';
+    }
+}
+window.testSigning = testSigning;
 </script>
 </body>
 </html>

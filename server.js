@@ -1,42 +1,38 @@
+// ============================================================
+// server.js — LGE WebApp Proxy + Signing + Admin
+// ============================================================
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { sign, prepareBody, CONFIG } = require('./signing');
 
-const serviceAccountPath = process.env.FIREBASE_KEY_PATH || './firebase-key.json';
-const serviceAccount = require(serviceAccountPath);
-
+// ---------- Firebase ----------
+const serviceAccount = require(process.env.FIREBASE_KEY_PATH || './firebase-key.json');
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
+// ---------- Express ----------
 const app = express();
 const PORT = process.env.PORT || 3000;
+const LGE_BASE = 'https://lgpg-sapi.sucbat.com.vn';
 
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(cors());
+app.use(cors({ origin: true, credentials: false }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ==========================================================
-// RUNTIME CONFIG (appVersion, buildNumber, appId, userAgent)
-// ==========================================================
-const DEFAULT_CONFIG = {
-    appVersion: '1.4.3',
-    buildNumber: '43',
-    appId: '20H343',
-    userAgent: null // null = auto-generate
-};
-
+// ============================================================
+// RUNTIME CONFIG
+// ============================================================
+const DEFAULT_CONFIG = { appVersion: '1.4.3', buildNumber: '43', appId: '20H343', userAgent: null };
 let runtimeConfig = { ...DEFAULT_CONFIG };
 
-function buildUserAgent() {
-    if (runtimeConfig.userAgent && runtimeConfig.userAgent.trim()) {
-        return runtimeConfig.userAgent.trim();
-    }
-    return `fieldforce/${runtimeConfig.buildNumber} CFNetwork/1410.1 Darwin/22.6.0`;
-}
+const buildUserAgent = () => runtimeConfig.userAgent?.trim() ||
+    `fieldforce/${runtimeConfig.buildNumber} CFNetwork/1410.1 Darwin/22.6.0`;
 
 async function loadRuntimeConfig() {
     try {
@@ -44,91 +40,85 @@ async function loadRuntimeConfig() {
         if (doc.exists) {
             const c = doc.data();
             runtimeConfig = {
-                appVersion: (c.appVersion && typeof c.appVersion === 'string') ? c.appVersion : DEFAULT_CONFIG.appVersion,
-                buildNumber: (c.buildNumber && /^\d+$/.test(String(c.buildNumber).trim()))
-                    ? String(c.buildNumber).trim()
-                    : DEFAULT_CONFIG.buildNumber,
-                appId: (c.appId && typeof c.appId === 'string') ? c.appId : DEFAULT_CONFIG.appId,
+                appVersion: typeof c.appVersion === 'string' ? c.appVersion : DEFAULT_CONFIG.appVersion,
+                buildNumber: /^\d+$/.test(String(c.buildNumber || '')) ? String(c.buildNumber) : DEFAULT_CONFIG.buildNumber,
+                appId: typeof c.appId === 'string' ? c.appId : DEFAULT_CONFIG.appId,
                 userAgent: c.userAgent || null
             };
         } else {
             runtimeConfig = { ...DEFAULT_CONFIG };
         }
-        console.log('[CONFIG] Runtime loaded:', runtimeConfig);
     } catch (e) {
         console.error('[loadRuntimeConfig]', e.message);
         runtimeConfig = { ...DEFAULT_CONFIG };
     }
 }
-
-// Initial load + periodic refresh (30s)
 loadRuntimeConfig();
-setInterval(loadRuntimeConfig, 30 * 1000).unref();
+setInterval(loadRuntimeConfig, 30_000).unref();
 
-// ==========================================================
-// HEADERS DÙNG CHUNG
-// ==========================================================
+// ============================================================
+// BASE HEADERS
+// ============================================================
 const getBaseHeaders = (token) => ({
     "Accept-Encoding": "gzip, deflate, br",
     "Accept": "application/json",
     "Accept-Language": "vi-VN,vi;q=0.9",
     "Authorization": token ? `Bearer ${token}` : '',
-    "Host": "lgpg-sapi.sucbat.com.vn",
     "User-Agent": buildUserAgent(),
     "Connection": "keep-alive",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "x-app-bundle-id": CONFIG.bundleId
 });
 
-// ==========================================================
+// ============================================================
 // UTILS
-// ==========================================================
-const isValidIMEI = (str) =>
-    typeof str === 'string' &&
-    /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/.test(str);
+// ============================================================
+const isValidIMEI = (s) =>
+    typeof s === 'string' && /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/.test(s);
 
 const normalizeIMEI = (raw) => {
     if (typeof raw !== 'string') return null;
-    const cleaned = raw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-    if (cleaned.length !== 32) return null;
-    return `${cleaned.slice(0, 8)}-${cleaned.slice(8, 12)}-${cleaned.slice(12, 16)}-${cleaned.slice(16, 20)}-${cleaned.slice(20)}`;
+    const c = raw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+    if (c.length !== 32) return null;
+    return `${c.slice(0,8)}-${c.slice(8,12)}-${c.slice(12,16)}-${c.slice(16,20)}-${c.slice(20)}`;
 };
 
-// ==========================================================
-// RATE LIMITER
-// ==========================================================
-const rateLimitMap = new Map();
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
-const RATE_LIMIT_MAX = 10;
-
-function loginRateLimiter(req, res, next) {
-    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-    const now = Date.now();
-    let entry = rateLimitMap.get(ip);
-    if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
-    if (entry.count >= RATE_LIMIT_MAX) {
-        const remaining = Math.max(1, Math.ceil((entry.resetAt - now) / 60000));
-        return res.status(429).json({ success: false, error: `Quá nhiều lần thử đăng nhập. Thử lại sau ${remaining} phút.` });
-    }
-    entry.count++;
-    rateLimitMap.set(ip, entry);
-    next();
-}
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [ip, entry] of rateLimitMap.entries()) if (now > entry.resetAt + 60_000) rateLimitMap.delete(ip);
-}, 5 * 60 * 1000).unref();
-
-// ==========================================================
-// SESSION MAP
-// ==========================================================
 const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
+// ============================================================
+// RATE LIMITER (login)
+// ============================================================
+const rateLimitMap = new Map();
+const RL_WINDOW = 15 * 60_000, RL_MAX = 10;
+
+function loginRateLimiter(req, res, next) {
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    let e = rateLimitMap.get(ip);
+    if (!e || now > e.resetAt) e = { count: 0, resetAt: now + RL_WINDOW };
+    if (e.count >= RL_MAX) {
+        return res.status(429).json({
+            success: false,
+            error: `Quá nhiều lần thử đăng nhập. Thử lại sau ${Math.ceil((e.resetAt - now)/60000)} phút.`
+        });
+    }
+    e.count++;
+    rateLimitMap.set(ip, e);
+    next();
+}
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, e] of rateLimitMap.entries())
+        if (now > e.resetAt + 60_000) rateLimitMap.delete(ip);
+}, 5 * 60_000).unref();
+
+// ============================================================
+// SESSION
+// ============================================================
 async function createSession(username, token) {
     if (!token) return;
-    const tokenHash = hashToken(token);
-    await db.collection('sessions').doc(tokenHash).set({
-        username: username.trim().toLowerCase(),
+    await db.collection('sessions').doc(hashToken(token)).set({
+        username: username.toLowerCase(),
         createdAt: new Date().toISOString(),
         lastSeenAt: new Date().toISOString()
     });
@@ -136,132 +126,232 @@ async function createSession(username, token) {
 
 async function verifySession(username, token) {
     if (!username || !token) return false;
-    const doc = await db.collection('sessions').doc(hashToken(token)).get();
-    return doc.exists && doc.data().username === username.trim().toLowerCase();
+    const d = await db.collection('sessions').doc(hashToken(token)).get();
+    return d.exists && d.data().username === username.toLowerCase();
 }
 
-const sessionTouchCache = new Map();
-const TOUCH_INTERVAL_MS = 5 * 60 * 1000;
-
+const touchCache = new Map();
 function touchSession(token) {
     if (!token) return;
-    const th = hashToken(token);
-    const now = Date.now();
-    if (now - (sessionTouchCache.get(th) || 0) < TOUCH_INTERVAL_MS) return;
-    sessionTouchCache.set(th, now);
-    db.collection('sessions').doc(th).update({ lastSeenAt: new Date().toISOString() }).catch(() => {});
+    const h = hashToken(token);
+    if (Date.now() - (touchCache.get(h) || 0) < 5 * 60_000) return;
+    touchCache.set(h, Date.now());
+    db.collection('sessions').doc(h).update({ lastSeenAt: new Date().toISOString() }).catch(() => {});
 }
-
 setInterval(() => {
     const now = Date.now();
-    for (const [k, t] of sessionTouchCache.entries()) if (now - t > TOUCH_INTERVAL_MS * 4) sessionTouchCache.delete(k);
-}, 10 * 60 * 1000).unref();
+    for (const [k, t] of touchCache.entries()) if (now - t > 20 * 60_000) touchCache.delete(k);
+}, 10 * 60_000).unref();
 
-// ==========================================================
-// PUBLIC VERSION ENDPOINT (cho client optional fetch)
-// ==========================================================
+// ============================================================
+// SIGNING KEY MANAGEMENT
+// ============================================================
+async function ensureSigningKeys(deviceRef, deviceData, token) {
+    if (deviceData?.privateKeyPem && deviceData?.installId
+        && deviceData?.fingerprint && deviceData?.keyId) {
+        return deviceData;
+    }
+
+    const { privateKey, publicKey: pubDer } = crypto.generateKeyPairSync('ec', {
+        namedCurve: 'P-256',
+        publicKeyEncoding: { type: 'spki', format: 'der' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+    });
+
+    // SPKI DER = 26 header + 65 uncompressed point → lấy 65 byte cuối
+    const pointBytes = pubDer.subarray(pubDer.length - 65);
+    const publicKeyBase64 = pointBytes.toString('base64');
+    const fingerprint = crypto.createHash('sha256').update(pointBytes).digest('hex');
+    const keyId = fingerprint;
+    const installId = crypto.randomUUID();
+
+    try {
+        const regResp = await axios.post(LGE_BASE + '/security/registerpublickey', {
+            appVersion: runtimeConfig.appVersion,
+            algorithm: CONFIG.algorithm,
+            installId,
+            type: 'register_public_key',
+            appSigningIdentity: CONFIG.appSigningIdentity,
+            appId: CONFIG.bundleId,
+            keyId,
+            platform: 'ios',
+            deviceFingerprint: fingerprint,
+            publicKey: publicKeyBase64
+        }, { headers: getBaseHeaders(token) });
+
+        console.log(`[registerpublickey] ${regResp.status} ${regResp.data?.messager || ''}`);
+    } catch (e) {
+        console.error('[registerpublickey] FAILED:', e.response?.data || e.message);
+        throw e;
+    }
+
+    const updates = {
+        installId, fingerprint, keyId,
+        privateKeyPem: privateKey,
+        publicKeyBase64,
+        signingKeysCreatedAt: new Date().toISOString()
+    };
+    if (deviceData) await deviceRef.update(updates);
+    else await deviceRef.set(updates, { merge: true });
+
+    return { ...(deviceData || {}), ...updates };
+}
+
+// ============================================================
+// AUTH MIDDLEWARE
+// ============================================================
+const checkTesterAccess = async (req, res, next) => {
+    const { request_user, token } = req.body;
+    if (!request_user) return res.status(403).json({ success: false, error: 'Thiếu request_user', isExpired: true });
+    if (!token) return res.status(403).json({ success: false, error: 'Thiếu token', isExpired: true });
+
+    try {
+        const norm = request_user.toLowerCase();
+        const testerDoc = await db.collection('testers').doc(norm).get();
+        if (!testerDoc.exists) {
+            return res.status(403).json({ success: false, error: 'Tài khoản bị gỡ quyền', isExpired: true });
+        }
+        const t = testerDoc.data();
+        if (t.expiresAt != null && Date.now() > t.expiresAt) {
+            return res.status(403).json({ success: false, error: 'Tài khoản hết hạn', isExpired: true });
+        }
+        if (!(await verifySession(norm, token))) {
+            return res.status(403).json({ success: false, error: 'Phiên không hợp lệ', isExpired: true });
+        }
+        touchSession(token);
+        req.deviceUser = norm;
+        next();
+    } catch (e) {
+        console.error('[checkTesterAccess]', e);
+        res.status(500).json({ success: false, error: 'Lỗi whitelist' });
+    }
+};
+
+async function getDevice(requestUser) {
+    const doc = await db.collection('devices').doc(requestUser).get();
+    if (!doc.exists) throw new Error('Device chưa tồn tại — đăng nhập lại');
+    const device = doc.data();
+    if (!device.privateKeyPem) throw new Error('Chưa có signing key — đăng nhập lại');
+    return device;
+}
+
+// ============================================================
+// PUBLIC: /api/version, /api/lge-appver
+// ============================================================
 app.get('/api/version', (req, res) => {
     res.json({
         success: true,
         data: {
-            appVersion: runtimeConfig.appVersion,
-            buildNumber: runtimeConfig.buildNumber,
-            appId: runtimeConfig.appId,
-            version: runtimeConfig.appVersion,      // backward compat
-            versionId: runtimeConfig.buildNumber    // backward compat
+            ...runtimeConfig,
+            version: runtimeConfig.appVersion,
+            versionId: runtimeConfig.buildNumber
         }
     });
 });
 
-// ==========================================================
-// PROXY LOGIN
-// ==========================================================
+app.get('/api/lge-appver', async (req, res) => {
+    try {
+        const r = await axios.get(LGE_BASE + '/public/appver', {
+            headers: { 'Accept': 'application/json', 'User-Agent': buildUserAgent() },
+            timeout: 8000
+        });
+        res.json({ success: true, version: r.data?.messager || null });
+    } catch (e) {
+        res.json({ success: false, error: e.message });
+    }
+});
+
+// ============================================================
+// 1. LOGIN
+// ============================================================
 app.post('/proxy-login', loginRateLimiter, async (req, res) => {
     const { payload } = req.body;
-    if (!payload || !payload.username) {
-        return res.status(400).json({ success: false, error: "Payload không hợp lệ." });
+    if (!payload?.username) {
+        return res.status(400).json({ success: false, error: 'Payload không hợp lệ' });
     }
     const requestUser = payload.username.trim().toLowerCase();
 
     try {
-        const testerDoc = await db.collection('testers').doc(requestUser).get();
-        if (!testerDoc.exists) {
-            return res.status(403).json({ success: false, error: "Tài khoản chưa được cấp quyền thử nghiệm!" });
+        // 1) Kiểm tra whitelist + hạn dùng
+        const tDoc = await db.collection('testers').doc(requestUser).get();
+        if (!tDoc.exists) {
+            return res.status(403).json({ success: false, error: 'Tài khoản chưa được cấp quyền!' });
         }
-
-        const userData = testerDoc.data();
-        let expireText = "Vĩnh viễn";
-        if (userData.expiresAt != null) {
-            const now = Date.now();
-            if (now > userData.expiresAt) {
-                return res.status(403).json({ success: false, error: "Tài khoản đã hết hạn sử dụng!" });
+        const t = tDoc.data();
+        let expireText = 'Vĩnh viễn';
+        if (t.expiresAt != null) {
+            if (Date.now() > t.expiresAt) {
+                return res.status(403).json({ success: false, error: 'Tài khoản đã hết hạn!' });
             }
-            const daysLeft = Math.max(0, Math.ceil((userData.expiresAt - now) / 86400000));
+            const daysLeft = Math.max(0, Math.ceil((t.expiresAt - Date.now()) / 86400000));
             expireText = `còn ${daysLeft} ngày`;
         }
 
-        // ========== IMEI FLOW ==========
+        // 2) IMEI / DeviceToken
         const deviceRef = db.collection('devices').doc(requestUser);
-        const deviceDoc = await deviceRef.get();
-        const deviceData = deviceDoc.exists ? deviceDoc.data() : null;
+        const dDoc = await deviceRef.get();
+        let deviceData = dDoc.exists ? dDoc.data() : null;
+        let imei = deviceData?.imei;
+        let deviceToken = deviceData?.deviceToken;
 
-        let imei, deviceToken;
-
-        if (!deviceData || !deviceData.imei) {
+        if (!imei) {
             const clientIMEI = normalizeIMEI(payload.IMEI);
             if (!clientIMEI) {
                 return res.status(400).json({
-                    success: false,
-                    needIMEI: true,
-                    error: "Vui lòng nhập IMEI thiết bị (định dạng: C6598981-5CDA-4819-A0C1-C9D8128F335F)"
+                    success: false, needIMEI: true,
+                    error: 'Vui lòng nhập IMEI (định dạng C6598981-5CDA-4819-A0C1-C9D8128F335F)'
                 });
             }
-
             imei = clientIMEI;
-            deviceToken = deviceData?.deviceToken ||
-                (crypto.randomUUID().replace(/-/g, '') + ":" + crypto.randomUUID().replace(/-/g, ''));
-
-            await db.runTransaction(async (tx) => {
-                const fresh = await tx.get(deviceRef);
-                if (!fresh.exists) {
-                    tx.set(deviceRef, {
-                        imei, deviceToken,
-                        createdAt: new Date().toISOString(),
-                        imeiUpdatedAt: new Date().toISOString()
-                    });
-                } else {
-                    tx.update(deviceRef, {
-                        imei, deviceToken,
-                        imeiUpdatedAt: new Date().toISOString()
-                    });
-                }
-            });
-        } else {
-            imei = deviceData.imei;
-            deviceToken = deviceData.deviceToken;
+            deviceToken = deviceToken ||
+                (crypto.randomUUID().replace(/-/g, '') + ':' + crypto.randomUUID().replace(/-/g, ''));
+            await deviceRef.set({
+                imei, deviceToken,
+                createdAt: deviceData?.createdAt || new Date().toISOString(),
+                imeiUpdatedAt: new Date().toISOString()
+            }, { merge: true });
+            deviceData = { ...(deviceData || {}), imei, deviceToken };
         }
 
-        payload.IMEI = imei;
-        payload.DeviceToken = deviceToken;
+        // 3) Chuẩn bị payload gửi LGE — CHỈ các field có trong request thật
+        const lgePayload = {
+            username: payload.username,
+            client_time: payload.client_time,
+            password: payload.password,
+            DeviceToken: deviceToken,
+            Platform: 'ios',
+            IMEI: imei,
+            AppId: runtimeConfig.appId,
+            versionid: runtimeConfig.buildNumber
+        };
 
-        // ========== VERSION INJECTION (từ runtimeConfig) ==========
-        payload.getVersion = runtimeConfig.appVersion;
-        payload.versionid = runtimeConfig.buildNumber;
-        payload.AppId = runtimeConfig.appId;
+        console.log(`[login] ${requestUser} | v${runtimeConfig.appVersion}(${runtimeConfig.buildNumber})`);
 
-        console.log(`[LOGIN] ${requestUser} | UA: ${buildUserAgent()} | v${runtimeConfig.appVersion} (${runtimeConfig.buildNumber})`);
-
-        const response = await axios.post('https://lgpg-sapi.sucbat.com.vn/users/login/', payload, {
-            headers: getBaseHeaders(null)
+        // 4) Gọi LGE
+        const resp = await axios.post(LGE_BASE + '/users/login', lgePayload, {
+            headers: getBaseHeaders(null),
+            timeout: 30000
         });
 
-        if (response.data && response.data.token) {
-            await createSession(requestUser, response.data.token);
+        if (!resp.data?.token) {
+            return res.status(resp.status).json({ success: false, error: resp.data });
         }
 
-        res.status(response.status).json({
+        // 5) Tạo session
+        await createSession(requestUser, resp.data.token);
+
+        // 6) Sinh key + register (best-effort)
+        try {
+            await ensureSigningKeys(deviceRef, deviceData, resp.data.token);
+            console.log(`[login] Signing keys OK for ${requestUser}`);
+        } catch (e) {
+            console.error(`[login] Key setup FAILED for ${requestUser}:`, e.message);
+            // Không fail login (login không cần chữ ký), nhưng API khác sẽ fail
+        }
+
+        res.json({
             success: true,
-            data: response.data,
+            data: resp.data,
             expireText,
             versionInfo: {
                 appVersion: runtimeConfig.appVersion,
@@ -278,107 +368,269 @@ app.post('/proxy-login', loginRateLimiter, async (req, res) => {
     }
 });
 
-// ==========================================================
-// CHECK TESTER ACCESS
-// ==========================================================
-const checkTesterAccess = async (req, res, next) => {
-    const { request_user, token } = req.body;
-    if (!request_user) return res.status(403).json({ success: false, error: "Lỗi xác thực danh tính.", isExpired: true });
-    if (!token) return res.status(403).json({ success: false, error: "Thiếu token xác thực.", isExpired: true });
-
+// ============================================================
+// 2. CHECK DEVICE (POST, signed, double-encode body)
+// ============================================================
+app.post('/proxy-checkdevice', checkTesterAccess, async (req, res) => {
     try {
-        const normUser = request_user.trim().toLowerCase();
-        const testerDoc = await db.collection('testers').doc(normUser).get();
-        if (!testerDoc.exists) {
-            return res.status(403).json({ success: false, error: "Tài khoản đã bị gỡ quyền truy cập.", isExpired: true });
-        }
-        const userData = testerDoc.data();
-        if (userData.expiresAt != null && Date.now() > userData.expiresAt) {
-            return res.status(403).json({ success: false, error: "Tài khoản đã hết hạn.", isExpired: true });
-        }
-        if (!(await verifySession(normUser, token))) {
-            return res.status(403).json({ success: false, error: "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.", isExpired: true });
-        }
-        touchSession(token);
-        next();
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/employee/checkdevice';
+
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 86400_000);
+
+        const deviceInfo = {
+            deviceId: device.imei,
+            powerState: { batteryState: 'unplugged', lowPowerMode: true, batteryLevel: 0.5 },
+            getApiLevel: -1,
+            getAndroidId: 'unknown',
+            getApplicationName: 'LGE 2.0',
+            getBatteryLevel: '50%',
+            getBrand: 'Apple',
+            getBuildNumber: runtimeConfig.buildNumber,
+            getBundleId: CONFIG.bundleId,
+            isCameraPresent: false,
+            getCarrier: '--',
+            getDeviceId: 'iPhone10,5',
+            getDeviceName: 'iPhone',
+            getFirstInstallTime: yesterday.toISOString(),
+            getLastUpdateTime: yesterday.toISOString(),
+            getManufacturer: 'Apple',
+            getModel: 'iPhone 8 Plus',
+            getSystemName: 'iOS',
+            getSystemVersion: '16.7.8',
+            getVersion: runtimeConfig.appVersion,
+            patchVersion: 'Store',
+            isAirplaneMode: false,
+            isLocationEnabled: true,
+            getSerialNumber: 'unknown',
+            getAvailableLocationProviders: {
+                isRangingAvailable: true,
+                locationServicesEnabled: true,
+                significantLocationChangeMonitoringAvailable: true,
+                headingAvailable: true
+            },
+            getFreeDiskStorage: 54077046784,
+            getIpAddress: '192.168.1.47',
+            getInstallerPackageName: 'Other',
+            getMaxMemory: -1,
+            getTotalDiskCapacity: 255968497664,
+            getTotalMemory: 3118219264,
+            getUsedMemory: 171835392,
+            isLandscape: false,
+            isHeadphonesConnected: false,
+            isEmulator: false
+        };
+
+        const bodyStr = prepareBody(deviceInfo);
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'POST', apiPath, bodyStr)
+        };
+
+        const r = await axios.post(LGE_BASE + apiPath, bodyStr, { headers, timeout: 15000 });
+        res.json({ success: true, data: r.data });
     } catch (e) {
-        console.error('[checkTesterAccess]', e);
-        res.status(500).json({ success: false, error: "Hệ thống kiểm tra Whitelist gặp sự cố." });
-    }
-};
-
-// ==========================================================
-// PROXY APIs
-// ==========================================================
-app.post('/proxy-upload', checkTesterAccess, async (req, res) => {
-    try {
-        const r = await axios.post('https://lgpg-sapi.sucbat.com.vn/attendants/upload', req.body.payload, { headers: getBaseHeaders(req.body.token) });
-        res.status(r.status).json({ success: true, data: r.data });
-    } catch (error) {
-        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
+        console.error('[/proxy-checkdevice]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
     }
 });
 
+// ============================================================
+// 3. PLAN (POST, signed, double-encode body)
+// ============================================================
+app.post('/proxy-plan', checkTesterAccess, async (req, res) => {
+    try {
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/dashboard/lgplanbyplan';
+
+        // Client gửi req.body.planDate = "YYYY-MM-DD"
+        const d = req.body.planDate || new Date().toISOString().slice(0, 10);
+        const innerObj = { pageNum: 0, planDate: d };
+
+        // double-encode: JSON.stringify(JSON.stringify(obj)) → content-length 45
+        const bodyStr = prepareBody(innerObj);
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'POST', apiPath, bodyStr)
+        };
+
+        const r = await axios.post(LGE_BASE + apiPath, bodyStr, { headers, timeout: 30000 });
+        res.json({ success: true, data: r.data });
+    } catch (e) {
+        console.error('[/proxy-plan]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
+    }
+});
+
+// ============================================================
+// 4. DOWNLOAD FULL (GET)
+// ============================================================
+app.post('/proxy-download-all', checkTesterAccess, async (req, res) => {
+    try {
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/download/all';
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'GET', apiPath, null)
+        };
+        const r = await axios.get(LGE_BASE + apiPath, {
+            headers,
+            timeout: 90000,
+            maxContentLength: 20 * 1024 * 1024
+        });
+        res.json({ success: true, data: r.data });
+    } catch (e) {
+        console.error('[/proxy-download-all]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
+    }
+});
+
+// ============================================================
+// 5. DOWNLOAD MENU (GET)
+// ============================================================
+app.post('/proxy-download-menu', checkTesterAccess, async (req, res) => {
+    try {
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/download/listMenu';
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'GET', apiPath, null)
+        };
+        const r = await axios.get(LGE_BASE + apiPath, { headers, timeout: 15000 });
+        res.json({ success: true, data: r.data });
+    } catch (e) {
+        console.error('[/proxy-download-menu]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
+    }
+});
+
+// ============================================================
+// 6. SHOPS (GET)
+// ============================================================
 app.post('/proxy-get-shops', checkTesterAccess, async (req, res) => {
     try {
-        const r = await axios.get('https://lgpg-sapi.sucbat.com.vn/shops/storemaintant', { headers: getBaseHeaders(req.body.token) });
-        res.status(r.status).json({ success: true, data: r.data });
-    } catch (error) {
-        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/shops/storemaintant';
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'GET', apiPath, null)
+        };
+        const r = await axios.get(LGE_BASE + apiPath, { headers, timeout: 30000 });
+        res.json({ success: true, data: r.data });
+    } catch (e) {
+        console.error('[/proxy-get-shops]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
     }
 });
 
+// ============================================================
+// 7. HISTORY (GET, headers shopid + attendantdate)
+// ============================================================
 app.post('/proxy-get-history', checkTesterAccess, async (req, res) => {
     try {
-        const h = getBaseHeaders(req.body.token);
-        h['shopid'] = '0';
-        h['attendantdate'] = req.body.date;
-        const r = await axios.get('https://lgpg-sapi.sucbat.com.vn/attendants/byshop', { headers: h });
-        res.status(r.status).json({ success: true, data: r.data });
-    } catch (error) {
-        res.status(error.response?.status || 500).json({ success: false, error: error.response?.data || error.message });
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/attendants/byshop';
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'GET', apiPath, null),
+            'shopid': '0',
+            'attendantdate': req.body.date      // "YYYYMMDD"
+        };
+        const r = await axios.get(LGE_BASE + apiPath, { headers, timeout: 30000 });
+        res.json({ success: true, data: r.data });
+    } catch (e) {
+        console.error('[/proxy-get-history]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
     }
 });
 
+// ============================================================
+// 8. UPLOAD (POST, signed) — chờ xác nhận body thật
+// ============================================================
+app.post('/proxy-upload', checkTesterAccess, async (req, res) => {
+    try {
+        const device = await getDevice(req.deviceUser);
+        const apiPath = '/attendants/upload';
+
+        // ⚠️ Khi có request /attendants/upload thật, kiểm tra lại:
+        //   - single-encode hay double-encode?
+        //   - thứ tự field có ảnh hưởng không?
+        // Hiện dùng double-encode (theo pattern các POST signed khác)
+        const bodyStr = prepareBody(req.body.payload);
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'POST', apiPath, bodyStr)
+        };
+        const r = await axios.post(LGE_BASE + apiPath, bodyStr, {
+            headers,
+            timeout: 60000,
+            maxContentLength: 30 * 1024 * 1024
+        });
+        res.json({ success: true, data: r.data });
+    } catch (e) {
+        console.error('[/proxy-upload]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false,
+            error: e.response?.data || e.message
+        });
+    }
+});
+
+// ============================================================
+// 9. VERIFY SESSION (dùng khi tab focus lại)
+// ============================================================
 app.post('/proxy-verify-session', checkTesterAccess, (req, res) => res.json({ success: true }));
 
-// ==========================================================
-// ADMIN VERIFY
-// ==========================================================
+// ============================================================
+// ADMIN — verify + tester CRUD + version config
+// ============================================================
 const verifyAdmin = async (req, res, next) => {
+    const pass = req.headers.admin_pass;
+    if (!pass) return res.status(401).json({ success: false, error: 'Thiếu mật khẩu' });
     try {
-        const { admin_pass } = req.headers;
-        if (!admin_pass) return res.status(401).json({ success: false, error: "Thiếu mật khẩu." });
-        const doc = await db.collection('admin_config').doc('settings').get();
-        if (!doc.exists || doc.data().password !== admin_pass) {
-            return res.status(401).json({ success: false, error: "Sai mật khẩu quản trị viên!" });
+        const d = await db.collection('admin_config').doc('settings').get();
+        if (!d.exists || d.data().password !== pass) {
+            return res.status(401).json({ success: false, error: 'Sai mật khẩu' });
         }
         next();
-    } catch (e) {
-        console.error('[verifyAdmin]', e);
-        res.status(500).json({ success: false, error: "Lỗi xác thực admin: " + e.message });
-    }
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 };
 
 app.post('/admin/verify', async (req, res) => {
     try {
         const { admin_pass } = req.body;
-        if (!admin_pass) return res.status(401).json({ success: false, error: "Thiếu mật khẩu." });
-        const doc = await db.collection('admin_config').doc('settings').get();
-        if (!doc.exists || doc.data().password !== admin_pass) {
-            return res.status(401).json({ success: false, error: "Sai mật khẩu!" });
+        if (!admin_pass) return res.status(401).json({ success: false, error: 'Thiếu mật khẩu' });
+        const d = await db.collection('admin_config').doc('settings').get();
+        if (!d.exists || d.data().password !== admin_pass) {
+            return res.status(401).json({ success: false, error: 'Sai mật khẩu' });
         }
         res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ==========================================================
-// ADMIN CONFIG — VERSION & BUILD
-// ==========================================================
 app.get('/admin/config/version', verifyAdmin, async (req, res) => {
     try {
-        const doc = await db.collection('admin_config').doc('settings').get();
-        const c = doc.exists ? doc.data() : {};
+        const d = await db.collection('admin_config').doc('settings').get();
+        const c = d.exists ? d.data() : {};
         res.json({
             success: true,
             data: {
@@ -386,13 +638,7 @@ app.get('/admin/config/version', verifyAdmin, async (req, res) => {
                 buildNumber: c.buildNumber || '',
                 appId: c.appId || '',
                 userAgent: c.userAgent || '',
-                // Runtime actual values
-                runtime: {
-                    appVersion: runtimeConfig.appVersion,
-                    buildNumber: runtimeConfig.buildNumber,
-                    appId: runtimeConfig.appId,
-                    userAgent: buildUserAgent()
-                },
+                runtime: { ...runtimeConfig, userAgent: buildUserAgent() },
                 defaults: DEFAULT_CONFIG
             }
         });
@@ -403,54 +649,29 @@ app.put('/admin/config/version', verifyAdmin, async (req, res) => {
     try {
         const { appVersion, buildNumber, appId, userAgent } = req.body;
         const update = {};
-
         if (appVersion !== undefined) {
             const v = String(appVersion).trim();
-            if (v && !/^\d+\.\d+\.\d+$/.test(v)) {
-                return res.status(400).json({ success: false, error: "App Version phải có dạng X.Y.Z (VD: 1.4.3)" });
-            }
+            if (v && !/^\d+\.\d+\.\d+$/.test(v))
+                return res.status(400).json({ success: false, error: 'App Version phải X.Y.Z' });
             update.appVersion = v || admin.firestore.FieldValue.delete();
         }
-
         if (buildNumber !== undefined) {
             const b = String(buildNumber).trim();
-            if (b && !/^\d+$/.test(b)) {
-                return res.status(400).json({ success: false, error: "Build Number phải là số nguyên (VD: 43)" });
-            }
+            if (b && !/^\d+$/.test(b))
+                return res.status(400).json({ success: false, error: 'Build phải số nguyên' });
             update.buildNumber = b || admin.firestore.FieldValue.delete();
         }
-
-        if (appId !== undefined) {
-            const a = String(appId).trim();
-            update.appId = a || admin.firestore.FieldValue.delete();
-        }
-
-        if (userAgent !== undefined) {
-            const ua = String(userAgent).trim();
-            update.userAgent = ua || admin.firestore.FieldValue.delete();
-        }
-
-        if (Object.keys(update).length === 0) {
-            return res.status(400).json({ success: false, error: "Không có dữ liệu cập nhật." });
-        }
+        if (appId !== undefined)
+            update.appId = String(appId).trim() || admin.firestore.FieldValue.delete();
+        if (userAgent !== undefined)
+            update.userAgent = String(userAgent).trim() || admin.firestore.FieldValue.delete();
 
         await db.collection('admin_config').doc('settings').set(update, { merge: true });
-        await loadRuntimeConfig(); // reload ngay
-
-        res.json({
-            success: true,
-            message: "Đã cập nhật cấu hình version.",
-            runtime: {
-                appVersion: runtimeConfig.appVersion,
-                buildNumber: runtimeConfig.buildNumber,
-                appId: runtimeConfig.appId,
-                userAgent: buildUserAgent()
-            }
-        });
+        await loadRuntimeConfig();
+        res.json({ success: true, runtime: { ...runtimeConfig, userAgent: buildUserAgent() } });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Reset về default hardcode
 app.post('/admin/config/version/reset', verifyAdmin, async (req, res) => {
     try {
         await db.collection('admin_config').doc('settings').set({
@@ -460,174 +681,128 @@ app.post('/admin/config/version/reset', verifyAdmin, async (req, res) => {
             userAgent: admin.firestore.FieldValue.delete()
         }, { merge: true });
         await loadRuntimeConfig();
-        res.json({ success: true, message: "Đã reset về giá trị mặc định.", runtime: runtimeConfig });
+        res.json({ success: true, runtime: { ...runtimeConfig, userAgent: buildUserAgent() } });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// Check version từ LGE (reference only — không ảnh hưởng runtime)
 app.get('/admin/config/version/lge', verifyAdmin, async (req, res) => {
     try {
-        const r = await axios.get('https://lgpg-sapi.sucbat.com.vn/public/appver', {
-            headers: { ...getBaseHeaders(null), 'Host': 'lgpg-sapi.sucbat.com.vn' },
-            timeout: 5000
+        const r = await axios.get(LGE_BASE + '/public/appver', {
+            headers: { 'Accept': 'application/json', 'User-Agent': buildUserAgent() },
+            timeout: 8000
         });
-        res.json({
-            success: true,
-            data: {
-                lgeVersion: r.data?.messager || null,
-                raw: r.data
-            }
-        });
+        res.json({ success: true, data: { lgeVersion: r.data?.messager, raw: r.data } });
     } catch (e) {
-        res.json({
-            success: false,
-            error: e.message,
-            hint: "Không fetch được /public/appver — có thể endpoint không tồn tại hoặc network bị chặn."
-        });
+        res.json({ success: false, error: e.message, hint: e.response?.data });
     }
 });
 
-// ==========================================================
-// ADMIN TESTERS CRUD
-// ==========================================================
+const toMillis = (v) => {
+    if (v == null) return null;
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') { const n = Number(v); return isNaN(n) ? new Date(v).getTime() : n; }
+    if (v._seconds != null) return v._seconds * 1000;
+    if (v.seconds != null) return v.seconds * 1000;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    return null;
+};
+
 app.get('/admin/testers', verifyAdmin, async (req, res) => {
     try {
-        const snapshot = await db.collection('testers').get();
-        const testers = [];
-        for (const doc of snapshot.docs) {
-            const deviceDoc = await db.collection('devices').doc(doc.id).get();
-            const dd = deviceDoc.exists ? deviceDoc.data() : {};
-            testers.push({
+        const snap = await db.collection('testers').get();
+        const arr = await Promise.all(snap.docs.map(async (doc) => {
+            const u = doc.data();
+            const d = (await db.collection('devices').doc(doc.id).get()).data() || {};
+            return {
                 username: doc.id,
-                ...doc.data(),
-                imei: dd.imei || "",
-                deviceToken: dd.deviceToken || "",
-                deviceCreatedAt: dd.createdAt || "",
-                imeiUpdatedAt: dd.imeiUpdatedAt || ""
-            });
-        }
-        res.json({ success: true, data: testers });
+                note: u.note || '',
+                addedAt: u.addedAt,
+                expiresAt: u.expiresAt,
+                imei: d.imei || '',
+                deviceToken: d.deviceToken || '',
+                deviceCreatedAt: d.createdAt || null,
+                hasSigningKey: !!d.privateKeyPem,
+                installId: d.installId || null
+            };
+        }));
+        arr.sort((a, b) => a.username.localeCompare(b.username));
+        res.json({ success: true, data: arr });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
 app.post('/admin/testers', verifyAdmin, async (req, res) => {
     try {
         const { username, note, expiresAt, imei } = req.body;
-        if (!username?.trim()) return res.status(400).json({ success: false, error: "Username không được rỗng." });
+        if (!username) return res.status(400).json({ success: false, error: 'Username rỗng' });
+        const norm = String(username).trim().toLowerCase();
+        const ref = db.collection('testers').doc(norm);
+        if ((await ref.get()).exists) return res.status(409).json({ success: false, error: 'Đã tồn tại' });
 
-        const normalized = username.trim().toLowerCase();
-        const testerRef = db.collection('testers').doc(normalized);
-        if ((await testerRef.get()).exists) {
-            return res.status(409).json({ success: false, error: `Tester "${normalized}" đã tồn tại.` });
-        }
-
-        const doc = { username: normalized, note: note || "", addedAt: new Date().toISOString() };
-        if (expiresAt != null && expiresAt !== "") {
-            const ms = typeof expiresAt === 'number' ? expiresAt : new Date(expiresAt).getTime();
-            if (isNaN(ms)) return res.status(400).json({ success: false, error: "Ngày hết hạn không hợp lệ." });
-            doc.expiresAt = ms;
-        }
-        await testerRef.set(doc);
+        await ref.set({
+            note: note || '',
+            expiresAt: expiresAt || null,
+            addedAt: Date.now()
+        });
 
         if (imei) {
-            const normalizedIMEI = normalizeIMEI(imei);
-            if (!normalizedIMEI) {
-                return res.status(400).json({ success: false, error: "IMEI không đúng định dạng UUID." });
+            const clean = normalizeIMEI(imei);
+            if (clean) {
+                await db.collection('devices').doc(norm).set({
+                    imei: clean,
+                    deviceToken: crypto.randomUUID().replace(/-/g, '') + ':' + crypto.randomUUID().replace(/-/g, ''),
+                    createdAt: new Date().toISOString()
+                }, { merge: true });
             }
-            const deviceToken = crypto.randomUUID().replace(/-/g, '') + ":" + crypto.randomUUID().replace(/-/g, '');
-            await db.collection('devices').doc(normalized).set({
-                imei: normalizedIMEI,
-                deviceToken,
-                createdAt: new Date().toISOString(),
-                imeiUpdatedAt: new Date().toISOString()
-            });
         }
-
-        res.json({ success: true, message: "Đã thêm tester." });
+        res.json({ success: true, message: `Đã thêm ${norm}` });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-app.put('/admin/testers/:username', verifyAdmin, async (req, res) => {
+app.put('/admin/testers/:user', verifyAdmin, async (req, res) => {
     try {
-        const normalized = req.params.username.trim().toLowerCase();
+        const norm = req.params.user.toLowerCase();
         const { note, expiresAt, imei } = req.body;
-        const testerRef = db.collection('testers').doc(normalized);
-        if (!(await testerRef.get()).exists) {
-            return res.status(404).json({ success: false, error: "Tester không tồn tại." });
-        }
-
         const update = {};
         if (note !== undefined) update.note = note;
-        if (expiresAt !== undefined) {
-            if (expiresAt === null || expiresAt === "") {
-                update.expiresAt = admin.firestore.FieldValue.delete();
-            } else {
-                const ms = typeof expiresAt === 'number' ? expiresAt : new Date(expiresAt).getTime();
-                if (isNaN(ms)) return res.status(400).json({ success: false, error: "Ngày hết hạn không hợp lệ." });
-                update.expiresAt = ms;
-            }
-        }
-        if (Object.keys(update).length > 0) await testerRef.update(update);
+        if (expiresAt !== undefined) update.expiresAt = expiresAt;
+        await db.collection('testers').doc(norm).set(update, { merge: true });
 
-        if (imei !== undefined && imei !== "") {
-            const normalizedIMEI = normalizeIMEI(imei);
-            if (!normalizedIMEI) {
-                return res.status(400).json({ success: false, error: "IMEI không đúng định dạng UUID." });
-            }
-            const deviceRef = db.collection('devices').doc(normalized);
-            const existing = await deviceRef.get();
-            if (existing.exists) {
-                await deviceRef.update({ imei: normalizedIMEI, imeiUpdatedAt: new Date().toISOString() });
-            } else {
-                const deviceToken = crypto.randomUUID().replace(/-/g, '') + ":" + crypto.randomUUID().replace(/-/g, '');
-                await deviceRef.set({
-                    imei: normalizedIMEI,
-                    deviceToken,
-                    createdAt: new Date().toISOString(),
+        if (imei) {
+            const clean = normalizeIMEI(imei);
+            if (clean) {
+                await db.collection('devices').doc(norm).set({
+                    imei: clean,
                     imeiUpdatedAt: new Date().toISOString()
-                });
+                }, { merge: true });
             }
         }
-
-        res.json({ success: true, message: "Cập nhật tester thành công." });
+        res.json({ success: true });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-app.delete('/admin/testers/:username', verifyAdmin, async (req, res) => {
+app.delete('/admin/testers/:user', verifyAdmin, async (req, res) => {
     try {
-        const normalized = req.params.username.trim().toLowerCase();
-        const testerRef = db.collection('testers').doc(normalized);
-        if (!(await testerRef.get()).exists) {
-            return res.status(404).json({ success: false, error: "Tester không tồn tại." });
-        }
-        await testerRef.delete();
-        await db.collection('devices').doc(normalized).delete().catch(() => {});
-        res.json({ success: true, message: "Đã xóa tester và device." });
+        const norm = req.params.user.toLowerCase();
+        await db.collection('testers').doc(norm).delete();
+        await db.collection('devices').doc(norm).delete().catch(() => {});
+        res.json({ success: true, message: `Đã xoá ${norm}` });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-app.delete('/admin/devices/:username', verifyAdmin, async (req, res) => {
+app.delete('/admin/devices/:user', verifyAdmin, async (req, res) => {
     try {
-        const normalized = req.params.username.trim().toLowerCase();
-        await db.collection('devices').doc(normalized).delete();
-        res.json({ success: true, message: "Đã reset Device (IMEI sẽ phải nhập lại khi login)." });
+        const norm = req.params.user.toLowerCase();
+        await db.collection('devices').doc(norm).delete().catch(() => {});
+        res.json({ success: true, message: `Đã reset device ${norm}` });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
-// ==========================================================
-// HEALTH
-// ==========================================================
-app.get('/health', (req, res) => res.json({
-    ok: true,
-    uptime: process.uptime(),
-    runtimeConfig: {
-        appVersion: runtimeConfig.appVersion,
-        buildNumber: runtimeConfig.buildNumber,
-        userAgent: buildUserAgent()
-    }
-}));
+// ============================================================
+// HEALTH + START
+// ============================================================
+app.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
-process.on('unhandledRejection', (r) => console.error('[unhandledRejection]', r));
-process.on('uncaughtException', (e) => console.error('[uncaughtException]', e));
-
-app.listen(PORT, () => console.log(`[SYSTEM] Máy chủ WebApp LGE chạy tại Port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`[server] Listening on :${PORT}`);
+    console.log(`[server] Bundle: ${CONFIG.bundleId} | v${runtimeConfig.appVersion}(${runtimeConfig.buildNumber})`);
+});

@@ -1,5 +1,5 @@
 // ============================================================
-// app.js — LGE WebApp Client
+// app.js — LGE WebApp Client v5
 // ============================================================
 const API_BASE = "https://lgpg-sapi.sucbat.com.vn";
 let token = "";
@@ -11,6 +11,10 @@ let pendingAccuracy = null;
 let lastFailedPayload = null;
 let shopListenerBound = false;
 let sessionKicked = false;
+
+// Cache ảnh đã resize — tránh resize lại khi Submit
+let currentResizedBase64 = null;
+let currentResizeInfo = null;
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -27,31 +31,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (expireText && expireText !== 'undefined') displayName += ` (${expireText})`;
         nameDisplay.innerText = displayName;
     }
-// ─── Avatar ──────────────────────────────────────────────
+
+    // Avatar
     const photoPath = localStorage.getItem('lge_user_photo');
     const avatarImg = document.getElementById('userAvatarImg');
     const avatarFallback = document.getElementById('userAvatarFallback');
-
     if (avatarImg && photoPath && photoPath !== 'undefined' && photoPath !== 'null') {
-        // photoPath dạng "/uploaded/20251110/xxx.jpg" → ghép API_BASE
         const baseUrl = API_BASE.replace(/\/$/, '');
         const path = photoPath.startsWith('/') ? photoPath : '/' + photoPath;
-
         avatarImg.onload = () => {
             avatarImg.style.display = 'block';
             if (avatarFallback) avatarFallback.style.display = 'none';
         };
         avatarImg.onerror = () => {
-            // Nếu ảnh lỗi 404 (user update ảnh, path cũ) → quay lại emoji
             avatarImg.style.display = 'none';
             if (avatarFallback) avatarFallback.style.display = 'flex';
         };
         avatarImg.src = baseUrl + path;
     } else if (avatarFallback) {
-        // Không có photo → giữ emoji mặc định
         avatarFallback.style.display = 'flex';
     }
-    // ─────────────────────────────────────────────────────────
+
     const savedAnchor = localStorage.getItem('lge_custom_anchor');
     if (savedAnchor && document.getElementById('customAnchorInput')) {
         document.getElementById('customAnchorInput').value = savedAnchor;
@@ -60,25 +60,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     bindImagePreview();
     bindShopSelectListener();
 
-    // --- Background checks (không block UI) ---
     checkAppVersion();
     checkDeviceRegistered();
     verifySessionStillValid().catch(() => {});
 
-    // --- Data loaders ---
     await Promise.all([
         loadPlan().catch(() => {}),
-        (async () => { await syncMenu().catch(() => {}); })(),
-        (async () => { await loadShops().catch(() => {}); })(),
-        (async () => { await loadHistory().catch(() => {}); })()
+        syncMenu().catch(() => {}),
+        loadShops().catch(() => {}),
+        loadHistory().catch(() => {})
     ]);
 
-    // --- Refresh on visibility ---
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && token && !sessionKicked) verifySessionStillValid();
     });
 });
 
+// ==================== RESIZE HELPER ====================
+// Khớp cấu hình FieldForce:
+//   Box 1080×1920 | contain | quality 80 | JPEG
+function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80) {
+    const srcW = img.naturalWidth || img.width;
+    const srcH = img.naturalHeight || img.height;
+    if (!srcW || !srcH) throw new Error('Ảnh chưa load xong');
+
+    const scale = Math.min(targetW / srcW, targetH / srcH);
+    const outW = Math.max(1, Math.round(srcW * scale));
+    const outH = Math.max(1, Math.round(srcH * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // JPEG không có alpha → nền trắng
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.drawImage(img, 0, 0, outW, outH);
+
+    return {
+        base64: canvas.toDataURL('image/jpeg', quality).split(',')[1],
+        width: outW,
+        height: outH,
+        sourceWidth: srcW,
+        sourceHeight: srcH,
+        sourceBytes: 0
+    };
+}
+
+// ==================== IMAGE PICKER ====================
 function bindImagePreview() {
     const imgInput = document.getElementById('imageInput');
     if (!imgInput) return;
@@ -86,23 +118,174 @@ function bindImagePreview() {
         const display = document.getElementById('fileNameDisplay');
         const previewBox = document.getElementById('imagePreview');
         const previewImg = document.getElementById('previewImg');
-        if (this.files && this.files.length > 0) {
-            const file = this.files[0];
-            display.innerHTML = `✅ Đã chọn: <span style="color:#333;">${file.name}</span> (${(file.size/1024).toFixed(0)} KB)`;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                previewImg.src = e.target.result;
-                previewBox.style.display = 'block';
-            };
-            reader.readAsDataURL(file);
-            clearRetryState();
-        } else {
+        const resizeInfoBox = document.getElementById('resizeInfoBox');
+        const resizeInfo = document.getElementById('resizeInfo');
+
+        if (!this.files || this.files.length === 0) {
             display.innerHTML = "";
             if (previewBox) previewBox.style.display = 'none';
             if (previewImg) previewImg.src = "";
+            if (resizeInfoBox) resizeInfoBox.style.display = 'none';
+            currentResizedBase64 = null;
+            currentResizeInfo = null;
+            return;
         }
+
+        const file = this.files[0];
+        display.innerHTML = `✅ Đã chọn: <span style="color:#333;">${file.name}</span> (${(file.size/1024).toFixed(0)} KB)`;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const resized = resizeImageToBase64(img, 1080, 1920, 0.80);
+                    resized.sourceBytes = file.size;
+                    currentResizedBase64 = resized.base64;
+                    currentResizeInfo = resized;
+
+                    // Preview ảnh đã resize
+                    previewImg.src = 'data:image/jpeg;base64,' + resized.base64;
+                    previewBox.style.display = 'block';
+
+                    // Info chi tiết
+                    const origKB = (file.size / 1024).toFixed(0);
+                    const newKB = Math.round(resized.base64.length * 0.75 / 1024);
+                    const b64KB = Math.round(resized.base64.length / 1024);
+                    if (resizeInfo) {
+                        resizeInfo.innerHTML = `
+                            <div>📷 <b>Gốc:</b> ${resized.sourceWidth}×${resized.sourceHeight} — ${origKB} KB</div>
+                            <div>✂️ <b>Resize:</b> ${resized.width}×${resized.height} — ${newKB} KB (JPEG q=0.80)</div>
+                            <div>📦 <b>Base64:</b> ${b64KB} KB <span style="color:#888;">(tăng ~33% so với binary)</span></div>
+                        `;
+                    }
+                    if (resizeInfoBox) resizeInfoBox.style.display = 'block';
+                } catch (err) {
+                    showToast('Lỗi resize ảnh: ' + err.message, 'error');
+                    currentResizedBase64 = null;
+                    currentResizeInfo = null;
+                }
+            };
+            img.onerror = () => showToast('Không đọc được ảnh', 'error');
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        clearRetryState();
     });
 }
+
+// ==================== BUILD PAYLOAD ====================
+// Dùng chung cho Submit và Preview
+function buildUploadPayload(shopData, finalLat, finalLng) {
+    if (!currentResizedBase64) throw new Error('Chưa có ảnh đã resize');
+
+    const accuracy = pendingAccuracy ?? generateRealisticAccuracy();
+    const fakeName = crypto.randomUUID().toUpperCase() + ".jpg";
+    const rt = getRealTime();
+
+    // DataLocation — khớp 100% sample 17/11/2026
+    const dataLocation = {
+        latitude: finalLat,
+        longitude: finalLng,
+        accuracy: accuracy,
+        timestamp: Date.now() + Math.random(),
+        mocked: false,
+        isFast: false,
+        usedHighAccuracy: true,
+        isLikelyPreciseFix: false   // luôn false
+    };
+
+    // Thứ tự field BẮT BUỘC giữ nguyên
+    return {
+        ShopId: shopData.id,
+        ShopCode: shopData.code,
+        PhotoName: fakeName,
+        Latitude: finalLat,
+        Longitude: finalLng,
+        Accuracy: accuracy,
+        ReportId: 1,
+        PhotoTime: rt.time,
+        PhotoType: nextPhotoType,
+        PhotoDate: rt.date,
+        guid: crypto.randomUUID(),
+        PhotoData: currentResizedBase64,
+        WorkStatus: 1,
+        DataLocation: JSON.stringify(dataLocation)
+    };
+}
+
+// ==================== PREVIEW MODAL ====================
+function previewPayload() {
+    const shopVal = document.getElementById('shopSelect').value;
+    if (!shopVal) return alert("Vui lòng chọn cửa hàng!");
+    const latStr = document.getElementById('lat').value;
+    const lngStr = document.getElementById('lng').value;
+    if (!latStr || !lngStr) return alert("Bấm [Xoay vị trí] trước!");
+    if (!currentResizedBase64) return alert("Chọn ảnh trước!");
+
+    const finalLat = parseFloat(latStr);
+    const finalLng = parseFloat(lngStr);
+    if (!Number.isFinite(finalLat) || !Number.isFinite(finalLng)) return alert("Tọa độ không hợp lệ");
+    const shopData = JSON.parse(shopVal);
+    if (!Number.isFinite(shopData.lat) || !Number.isFinite(shopData.lng)) return alert("Shop chưa có tọa độ");
+
+    let payload;
+    try {
+        payload = buildUploadPayload(shopData, finalLat, finalLng);
+    } catch (err) {
+        return alert(err.message);
+    }
+
+    // Tạo bản preview (truncate PhotoData)
+    const preview = { ...payload };
+    preview.PhotoData = preview.PhotoData.slice(0, 60) + '...[TRUNCATED ' +
+        (preview.PhotoData.length - 60) + ' chars]';
+
+    const bodyStr = JSON.stringify(payload);
+    const bodyBytes = new Blob([bodyStr]).size;
+
+    const info = document.getElementById('previewInfo');
+    info.innerHTML = `
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12px;">
+            <b>ShopId:</b><span>${payload.ShopId} (${payload.ShopCode})</span>
+            <b>GPS:</b><span>${payload.Latitude.toFixed(6)}, ${payload.Longitude.toFixed(6)}</span>
+            <b>Accuracy:</b><span>${payload.Accuracy.toFixed(1)}m</span>
+            <b>PhotoType:</b><span>${payload.PhotoType} (${parseInt(payload.PhotoType)%2===0?'Check-in':'Check-out'})</span>
+            <b>PhotoTime:</b><span>${payload.PhotoTime}</span>
+            <b>PhotoDate:</b><span>${payload.PhotoDate}</span>
+            <b>Ảnh gốc:</b><span>${currentResizeInfo.sourceWidth}×${currentResizeInfo.sourceHeight} (${(currentResizeInfo.sourceBytes/1024).toFixed(0)} KB)</span>
+            <b>Ảnh resize:</b><span>${currentResizeInfo.width}×${currentResizeInfo.height} (${Math.round(currentResizedBase64.length*0.75/1024)} KB)</span>
+            <b>PhotoData b64:</b><span>${Math.round(currentResizedBase64.length/1024)} KB (${currentResizedBase64.length} chars)</span>
+            <b>Body JSON:</b><span>${bodyStr.length} chars ≈ ${bodyBytes} bytes</span>
+            <b>Encoding:</b><span style="color:#059669;font-weight:700;">SINGLE (không double)</span>
+        </div>
+    `;
+
+    document.getElementById('previewJson').textContent = JSON.stringify(preview, null, 2);
+
+    // Lưu để "Gửi luôn" dùng
+    document.getElementById('previewPayloadModal').dataset.payload = JSON.stringify(payload);
+    document.getElementById('previewPayloadModal').classList.add('active');
+}
+window.previewPayload = previewPayload;
+
+function closePreviewModal() {
+    document.getElementById('previewPayloadModal').classList.remove('active');
+}
+window.closePreviewModal = closePreviewModal;
+
+async function sendFromPreview() {
+    const modal = document.getElementById('previewPayloadModal');
+    try {
+        const payload = JSON.parse(modal.dataset.payload || 'null');
+        if (!payload) return alert('Không có payload');
+        closePreviewModal();
+        await doUpload(payload);
+    } catch (e) {
+        alert('Lỗi: ' + e.message);
+    }
+}
+window.sendFromPreview = sendFromPreview;
 
 // ==================== TOAST ====================
 function showToast(msg, type = 'success') {
@@ -112,7 +295,7 @@ function showToast(msg, type = 'success') {
     t.className = `toast toast-${type}`;
     t.innerText = msg;
     c.appendChild(t);
-    setTimeout(() => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 350); }, 3200);
+    setTimeout(() => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 350); }, 4000);
 }
 
 // ==================== SESSION ====================
@@ -132,7 +315,6 @@ async function proxyFetch(endpoint, body) {
     let result;
     try { result = await res.json(); }
     catch { throw new Error(`Response không phải JSON (status ${res.status})`); }
-
     if (result && result.isExpired) {
         handleSessionExpired(result.error);
         const e = new Error('SESSION_EXPIRED');
@@ -144,7 +326,7 @@ async function proxyFetch(endpoint, body) {
 
 async function verifySessionStillValid() {
     try { await proxyFetch('/proxy-verify-session', { token, request_user: reqUser }); }
-    catch (e) { /* đã redirect nếu expired */ }
+    catch (e) { /* redirect */ }
 }
 
 // ==================== BACKGROUND CHECKS ====================
@@ -167,9 +349,7 @@ async function checkDeviceRegistered() {
         const { result } = await proxyFetch('/proxy-checkdevice', { token, request_user: reqUser });
         if (result.success) {
             const reg = result.data?.data?.[0]?.isRegistered;
-            if (reg !== 1) {
-                showToast('⚠️ IMEI chưa được LGE đăng ký — liên hệ admin', 'error');
-            }
+            if (reg !== 1) showToast('⚠️ IMEI chưa được LGE đăng ký', 'error');
         }
     } catch (e) { if (e.sessionExpired) return; }
 }
@@ -188,10 +368,7 @@ function switchTab(tabId, navElement) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
     document.getElementById(tabId).classList.add('active');
     navElement.classList.add('active');
-    // lazy load plan khi vào tab
-    if (tabId === 'tab-plan' && document.getElementById('planList').innerText.includes('Đang tải')) {
-        loadPlan();
-    }
+    if (tabId === 'tab-plan' && document.getElementById('planList')?.innerText.includes('Đang tải')) loadPlan();
 }
 window.switchTab = switchTab;
 
@@ -257,19 +434,15 @@ async function syncMenu() {
         if (result.success) {
             localStorage.setItem('lge_menu', JSON.stringify(result.data));
             localStorage.setItem('lge_menu_at', Date.now().toString());
-            printLog(`Menu: ${result.data.data?.length || 0} items`);
         }
-    } catch (e) {
-        if (e.sessionExpired) return;
-        printLog(`Menu lỗi: ${e.message}`);
-    }
+    } catch (e) { if (e.sessionExpired) return; }
 }
 
 // ==================== PLAN ====================
 async function loadPlan() {
     const container = document.getElementById('planList');
     if (!container) return;
-    container.innerHTML = "<div style='text-align:center;padding:20px;color:#666;'>⏳ Đang tải lịch...</div>";
+    container.innerHTML = "<div style='text-align:center;padding:20px;color:#666;'>⏳ Đang tải...</div>";
 
     const d = new Date();
     const pad = n => n.toString().padStart(2, '0');
@@ -277,42 +450,34 @@ async function loadPlan() {
 
     try {
         const { result } = await proxyFetch('/proxy-plan', { token, request_user: reqUser, planDate });
-
         if (!result.success) {
-            container.innerHTML = `<div style='text-align:center;padding:20px;color:#dc3545;'>Lỗi: ${JSON.stringify(result.error)}</div>`;
+            container.innerHTML = `<div style='color:#dc3545;text-align:center;padding:20px;'>Lỗi: ${JSON.stringify(result.error)}</div>`;
             return;
         }
-
         const rows = result.data?.data || [];
         if (!rows.length) {
-            container.innerHTML = "<div style='text-align:center;padding:20px;color:#888;'>Chưa có lịch làm việc.</div>";
+            container.innerHTML = "<div style='text-align:center;padding:20px;color:#888;'>Chưa có lịch.</div>";
             return;
         }
-
         const today = planDate;
         container.innerHTML = rows.map(row => {
             const isToday = row.date === today;
             const isOff = row.target === 'OFF';
-            const bg = isToday ? '#fff5f7' : '#fff';
-            const border = isToday ? '2px solid #a50034' : '1px solid #eee';
-            const statusColor = isOff ? '#dc3545' : '#059669';
-            const statusText = isOff ? 'NGHỈ' : 'Ca ' + row.target;
-
             return `
-                <div style="background:${bg};border:${border};border-radius:12px;padding:12px;margin-bottom:10px;">
+                <div style="background:${isToday?'#fff5f7':'#fff'};border:${isToday?'2px solid #a50034':'1px solid #eee'};border-radius:12px;padding:12px;margin-bottom:10px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <b style="font-size:14px;color:#a50034;">${row.dayName} — ${row.date}${isToday ? ' (Hôm nay)' : ''}</b>
-                        <span style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">${statusText}</span>
+                        <b style="font-size:14px;color:#a50034;">${row.dayName} — ${row.date}${isToday?' (Hôm nay)':''}</b>
+                        <span style="background:${isOff?'#dc3545':'#059669'};color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">${isOff?'NGHỈ':'Ca '+row.target}</span>
                     </div>
                     <div style="font-size:12px;color:#555;line-height:1.8;">
-                        <div>🕒 Vào ca: <b>${row.i || '—'}</b> · Ra ca: <b>${row.o || '—'}</b></div>
+                        <div>🕒 Vào: <b>${row.i || '—'}</b> · Ra: <b>${row.o || '—'}</b></div>
                         <div>✅ Thực tế: <b>${row.actual || '—'}</b></div>
                     </div>
                 </div>`;
         }).join('');
     } catch (e) {
         if (e.sessionExpired) return;
-        container.innerHTML = `<div style='text-align:center;padding:20px;color:#dc3545;'>Lỗi tải lịch: ${e.message}</div>`;
+        container.innerHTML = `<div style='color:#dc3545;text-align:center;padding:20px;'>Lỗi: ${e.message}</div>`;
     }
 }
 window.loadPlan = loadPlan;
@@ -339,37 +504,27 @@ async function loadShops() {
     const btnReload = document.getElementById('btnReloadShops');
     if (!select) return;
 
-    // Ưu tiên cache từ /download/all
     const cached = localStorage.getItem('lge_full_sync');
     if (cached) {
         try {
             const { storeList } = JSON.parse(cached);
-            if (storeList?.length) {
-                renderShopOptions(select, storeList);
-                printLog(`Dùng cache: ${storeList.length} shops`);
-                return;
-            }
+            if (storeList?.length) { renderShopOptions(select, storeList); return; }
         } catch { /* ignore */ }
     }
 
-    // Fallback /shops/storemaintant
     select.disabled = true;
     select.classList.add('loading');
-    select.innerHTML = '<option value="">⏳ Đang tải từ LGE...</option>';
+    select.innerHTML = '<option value="">⏳ Đang tải...</option>';
     if (btnReload) btnReload.style.display = 'none';
-
     try {
         const { result } = await proxyFetch('/proxy-get-shops', { token, request_user: reqUser });
-        if (result.success && result.data?.data) {
-            renderShopOptions(select, result.data.data);
-            printLog(`Đã tải ${result.data.data.length} shops`);
-        } else throw new Error(result.error || 'Dữ liệu rỗng');
+        if (result.success && result.data?.data) renderShopOptions(select, result.data.data);
+        else throw new Error(result.error || 'Dữ liệu rỗng');
     } catch (e) {
         if (e.sessionExpired) return;
-        select.innerHTML = "<option value=''>❌ Không tải được shops</option>";
+        select.innerHTML = "<option value=''>❌ Không tải được</option>";
         select.classList.remove('loading');
         if (btnReload) btnReload.style.display = 'inline-block';
-        printLog(`[LỖI] Shops: ${e.message}`);
     }
 }
 window.loadShops = loadShops;
@@ -399,9 +554,8 @@ document.getElementById('btnRandomGps')?.addEventListener('click', () => {
     if (!shopSelect || !shopSelect.value) return alert("Vui lòng chọn cửa hàng!");
     const shopData = JSON.parse(shopSelect.value);
     if (!Number.isFinite(shopData.lat) || !Number.isFinite(shopData.lng)) {
-        return alert("Cửa hàng chưa có tọa độ hợp lệ. Dùng Điểm neo.");
+        return alert("Cửa hàng chưa có tọa độ. Dùng Điểm neo.");
     }
-
     let baseLat = shopData.lat, baseLng = shopData.lng;
     const customVal = document.getElementById('customAnchorInput').value.trim();
     if (customVal) {
@@ -409,7 +563,6 @@ document.getElementById('btnRandomGps')?.addEventListener('click', () => {
         if (!parsed) return alert("Điểm neo không hợp lệ!\nVD: 21.2099, 106.0939");
         baseLat = parsed.lat; baseLng = parsed.lng;
     }
-
     const noisy = addGpsNoise(baseLat, baseLng, 65);
     document.getElementById('lat').value = noisy.latitude;
     document.getElementById('lng').value = noisy.longitude;
@@ -420,12 +573,12 @@ document.getElementById('btnRandomGps')?.addEventListener('click', () => {
     const dist = getDistanceMeters(noisy.latitude, noisy.longitude, shopData.lat, shopData.lng);
     const distDisplay = document.getElementById('distanceDisplay');
     if (dist > 150) {
-        distDisplay.innerHTML = `⚠️ Cách shop: <span style="color:#dc3545;font-size:14px;">${dist.toFixed(1)}m</span><br><b style="color:#dc3545;">(> 150m — Submit sẽ bị chặn)</b>`;
+        distDisplay.innerHTML = `⚠️ Cách shop: <span style="color:#dc3545;font-size:14px;">${dist.toFixed(1)}m</span><br><b style="color:#dc3545;">(> 150m — sẽ bị chặn)</b>`;
     } else {
-        distDisplay.innerHTML = `✅ Cách shop: <span style="color:#059669;font-size:14px;">${dist.toFixed(1)}m</span><br><b style="color:#059669;">(Hợp lệ: <150m)</b>`;
+        distDisplay.innerHTML = `✅ Cách shop: <span style="color:#059669;font-size:14px;">${dist.toFixed(1)}m</span><br><b style="color:#059669;">(Hợp lệ)</b>`;
     }
     clearRetryState();
-    printLog(`Xoay OK. Lệch: ${dist.toFixed(1)}m | Accuracy: ${pendingAccuracy.toFixed(1)}m`);
+    printLog(`Xoay OK. Lệch: ${dist.toFixed(1)}m | Acc: ${pendingAccuracy.toFixed(1)}m`);
 });
 
 function updateAccuracyDisplay(acc) {
@@ -438,7 +591,7 @@ function updateAccuracyDisplay(acc) {
     let color = '#059669';
     if (acc > 50) color = '#dc3545';
     else if (acc > 30) color = '#d97706';
-    el.innerHTML = `🎯 <b style="color:${color};font-size:14px;">${acc.toFixed(1)}m</b> <span style="color:#888;font-size:11px;">(sẽ gửi kèm)</span>`;
+    el.innerHTML = `🎯 <b style="color:${color};font-size:14px;">${acc.toFixed(1)}m</b>`;
 }
 
 // ==================== HISTORY ====================
@@ -448,11 +601,10 @@ async function loadHistory() {
     const dateStr = `${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}`;
     const listDiv = document.getElementById('historyList');
     if (!listDiv) return;
-    listDiv.innerHTML = "<div style='text-align:center;padding:20px;color:#666;'>⏳ Đang đồng bộ nhật ký...</div>";
+    listDiv.innerHTML = "<div style='text-align:center;padding:20px;color:#666;'>⏳ Đang đồng bộ...</div>";
 
     try {
         const { result } = await proxyFetch('/proxy-get-history', { token, request_user: reqUser, date: dateStr });
-
         listDiv.innerHTML = "";
         const items = result.data?.data;
         if (result.success && Array.isArray(items) && items.length > 0) {
@@ -485,21 +637,21 @@ async function loadHistory() {
                         <img src="${imgUrl}" alt="Photo" onerror="this.src='https://via.placeholder.com/80?text=No+Image'">
                         <div class="history-info">
                             <span class="badge">${typeName}</span><br>
-                            ${shopLabel ? `<b>🏪 Cửa hàng:</b> ${shopLabel}<br>` : ''}
-                            <b>🕒 Thời gian:</b> ${timeOnly}<br>
-                            <b>📍 GPS:</b> ${latStr}, ${lngStr}<br>
-                            <b>🎯 Accuracy:</b> ${accStr}
+                            ${shopLabel ? `<b>🏪</b> ${shopLabel}<br>` : ''}
+                            <b>🕒</b> ${timeOnly}<br>
+                            <b>📍</b> ${latStr}, ${lngStr}<br>
+                            <b>🎯</b> ${accStr}
                         </div>
                     </div>`;
             });
         } else {
             nextPhotoType = "0";
             updatePhotoTypeUI();
-            listDiv.innerHTML = "<div style='text-align:center;padding:20px;color:#888;'>Chưa có báo cáo nào hôm nay.</div>";
+            listDiv.innerHTML = "<div style='text-align:center;padding:20px;color:#888;'>Chưa có báo cáo hôm nay.</div>";
         }
     } catch (e) {
         if (e.sessionExpired) return;
-        listDiv.innerHTML = "<div style='text-align:center;padding:20px;color:#dc3545;'>Lỗi đồng bộ nhật ký!</div>";
+        listDiv.innerHTML = "<div style='color:#dc3545;text-align:center;padding:20px;'>Lỗi đồng bộ!</div>";
     }
 }
 window.loadHistory = loadHistory;
@@ -514,7 +666,7 @@ function resolveShopLabel(item) {
     return '';
 }
 
-// ==================== UPLOAD ====================
+// ==================== SUBMIT ====================
 const btnSubmit = document.getElementById('btnSubmit');
 const btnRetry = document.getElementById('btnRetry');
 
@@ -528,7 +680,6 @@ function showRetryUI() {
 
 if (btnSubmit) {
     btnSubmit.addEventListener('click', async () => {
-        const fileInput = document.getElementById('imageInput');
         const shopVal = document.getElementById('shopSelect').value;
         if (!shopVal) return alert("Vui lòng chọn cửa hàng!");
         const latStr = document.getElementById('lat').value;
@@ -537,53 +688,30 @@ if (btnSubmit) {
         const finalLat = parseFloat(latStr);
         const finalLng = parseFloat(lngStr);
         if (!Number.isFinite(finalLat) || !Number.isFinite(finalLng)) return alert("Tọa độ lỗi.");
-        if (!fileInput.files || !fileInput.files.length) return alert("Chọn ảnh!");
+        if (!currentResizedBase64) return alert("Chọn ảnh trước!");
         const shopData = JSON.parse(shopVal);
         if (!Number.isFinite(shopData.lat) || !Number.isFinite(shopData.lng)) return alert("Shop chưa có tọa độ.");
 
         const dist = getDistanceMeters(finalLat, finalLng, shopData.lat, shopData.lng);
-        if (dist > 150) return alert(`Vị trí cách shop ${dist.toFixed(1)}m (>150m).`);
+        if (dist > 150) return alert(`Cách shop ${dist.toFixed(1)}m (>150m).`);
+
+        let payload;
+        try {
+            payload = buildUploadPayload(shopData, finalLat, finalLng);
+        } catch (err) {
+            return alert(err.message);
+        }
+
+        localStorage.setItem('lge_custom_anchor',
+            document.getElementById('customAnchorInput').value.trim());
 
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "⏳ ĐANG XỬ LÝ...";
-
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            const img = new Image();
-            img.onload = async function () {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                canvas.getContext('2d').drawImage(img, 0, 0);
-                const cleanBase64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
-
-                const accuracy = pendingAccuracy ?? generateRealisticAccuracy();
-                const fakeName = crypto.randomUUID().toUpperCase() + ".jpg";
-                const rt = getRealTime();
-
-                const payload = {
-                    ShopId: shopData.id, ShopCode: shopData.code, PhotoName: fakeName,
-                    Latitude: finalLat, Longitude: finalLng, Accuracy: accuracy,
-                    ReportId: 1, PhotoTime: rt.time, PhotoType: nextPhotoType,
-                    PhotoDate: rt.date, guid: crypto.randomUUID(),
-                    PhotoData: cleanBase64, WorkStatus: 1,
-                    DataLocation: JSON.stringify({
-                        latitude: finalLat, longitude: finalLng, accuracy,
-                        isFast: false, usedHighAccuracy: true, isLikelyPreciseFix: true
-                    })
-                };
-
-                localStorage.setItem('lge_custom_anchor',
-                    document.getElementById('customAnchorInput').value.trim());
-
-                await doUpload(payload);
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(fileInput.files[0]);
+        btnSubmit.innerText = "⏳ ĐANG GỬI...";
+        await doUpload(payload);
     });
 }
 
+// ==================== DO UPLOAD ====================
 async function doUpload(payload) {
     try {
         printLog("Đang gửi báo cáo lên LGE...");
@@ -591,21 +719,33 @@ async function doUpload(payload) {
             token, request_user: reqUser, payload
         });
 
-        if (res.ok && result.success) {
-            showToast('✅ Gửi báo cáo thành công!', 'success');
-            printLog('[OK] Đã ghi nhận.');
+        // LGE upload: {"status":100,"messeger":"..."} — KHÁC statusId:200
+        const lgeStatus = result.data?.status;
+        const lgeMsg = result.data?.messeger;
+
+        if (res.ok && result.success && lgeStatus === 100) {
+            const successMsg = lgeMsg || 'Gửi báo cáo thành công!';
+            showToast('✅ ' + successMsg, 'success');
+            printLog('[OK] ' + successMsg);
+
             clearImage();
             clearRetryState();
             pendingAccuracy = null;
             updateAccuracyDisplay(null);
 
-            const historyNav = document.querySelectorAll('.nav-item')[2]; // Plan, Report, History
+            const historyNav = document.querySelectorAll('.nav-item')[2];
             if (historyNav) switchTab('tab-history', historyNav);
             await loadHistory();
+
+            const listDiv = document.getElementById('historyList');
+            if (listDiv && listDiv.innerText.includes('Chưa ghi nhận')) {
+                setTimeout(() => loadHistory(), 1000);
+            }
         } else {
-            const errMsg = typeof result.error === 'string' ? result.error : JSON.stringify(result.error);
-            printLog(`[FAIL] ${errMsg}`);
-            showToast('❌ Gửi thất bại. Bấm [Thử lại].', 'error');
+            const errMsg = lgeMsg
+                || (typeof result.error === 'string' ? result.error : JSON.stringify(result.error || {}));
+            printLog(`[THẤT BẠI] status=${lgeStatus ?? 'N/A'} | ${errMsg}`);
+            showToast('❌ ' + (lgeMsg || 'Gửi thất bại. Bấm [Thử lại].'), 'error');
             lastFailedPayload = payload;
             showRetryUI();
         }
@@ -616,7 +756,7 @@ async function doUpload(payload) {
         lastFailedPayload = payload;
         showRetryUI();
     } finally {
-        if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.innerText = "🚀 GỬI DỮ LIỆU"; }
+        if (btnSubmit) { btnSubmit.disabled = false; btnSubmit.innerText = "🚀 GỬI DỮ LIỆU LÊN MÁY CHỦ"; }
     }
 }
 
@@ -636,5 +776,8 @@ function clearImage() {
     const d = document.getElementById('fileNameDisplay'); if (d) d.innerHTML = "";
     const pb = document.getElementById('imagePreview'); if (pb) pb.style.display = 'none';
     const pi = document.getElementById('previewImg'); if (pi) pi.src = "";
+    const rib = document.getElementById('resizeInfoBox'); if (rib) rib.style.display = 'none';
+    currentResizedBase64 = null;
+    currentResizeInfo = null;
 }
 window.clearImage = clearImage;

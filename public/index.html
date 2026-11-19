@@ -11,6 +11,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="LGE_CC">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+    <!-- 3c. CSS cho Preview Modal -->
+    <style>
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
+        .modal-bg.active { display: flex; }
+        .modal { background: white; padding: 20px; border-radius: 14px; width: 100%; max-height: 90vh; overflow-y: auto; }
+        .modal h3 { margin: 0 0 14px 0; color: #a50034; font-size: 16px; }
+        .modal-actions { display: flex; gap: 8px; }
+    </style>
 </head>
 <body>
     <!-- Toast container -->
@@ -108,13 +117,21 @@
                     <div id="fileNameDisplay"
                          style="text-align: center; margin-top: 10px; font-size: 12px; color: #a50034; font-weight: bold;"></div>
 
+                    <!-- 3a. Khối imagePreview kèm resizeInfo và nút Xem trước Payload -->
                     <div id="imagePreview" style="display:none; text-align:center; margin-top:10px;">
                         <img id="previewImg"
                              style="max-width:220px; max-height:220px; border-radius:12px; border:2px solid #f5b3c3; object-fit:cover;">
-                        <div style="margin-top:8px;">
+                        <div id="resizeInfoBox" style="display:none; margin-top:10px; padding:10px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd; font-size:11px; color:#0c4a6e; text-align:left; line-height:1.7; font-family:'Courier New', monospace;">
+                            <div id="resizeInfo"></div>
+                        </div>
+                        <div style="margin-top:10px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
                             <button type="button" onclick="clearImage()"
                                     style="background:#fff; color:#a50034; border:1.5px solid #a50034; padding:8px 16px; border-radius:20px; font-weight:700; font-size:12px; cursor:pointer;">
                                 ✕ Xóa ảnh
+                            </button>
+                            <button type="button" onclick="previewPayload()"
+                                    style="background:#fff; color:#0891b2; border:1.5px solid #0891b2; padding:8px 16px; border-radius:20px; font-weight:700; font-size:12px; cursor:pointer;">
+                                🔍 Xem trước Payload
                             </button>
                         </div>
                     </div>
@@ -138,15 +155,17 @@
             </div>
             <div id="historyList" class="history-list"></div>
         </div>
-    </main>
-    <!-- TRONG <main class="app-body">, THÊM TRƯỚC </main>: -->
-    <div id="tab-plan" class="tab-pane">
-        <div class="history-header">
-            <h3>📅 Lịch làm việc tuần</h3>
-            <button onclick="loadPlan()" class="btn-refresh">🔄 Tải lại</button>
+
+        <!-- ==================== TAB PLAN ==================== -->
+        <div id="tab-plan" class="tab-pane">
+            <div class="history-header">
+                <h3>📅 Lịch làm việc tuần</h3>
+                <button onclick="loadPlan()" class="btn-refresh">🔄 Tải lại</button>
+            </div>
+            <div id="planList"></div>
         </div>
-        <div id="planList"></div>
-    </div>
+    </main>
+
     <nav class="bottom-nav">
         <div class="nav-item" onclick="switchTab('tab-plan', this); loadPlan();">
             <div class="nav-icon">📅</div>
@@ -161,6 +180,34 @@
             <div class="nav-label">Lịch Sử</div>
         </div>
     </nav>
+
+    <!-- 3b. PREVIEW PAYLOAD MODAL (Nằm trước thẻ script) -->
+    <div class="modal-bg" id="previewPayloadModal" onclick="if(event.target===this)closePreviewModal()">
+        <div class="modal" style="max-width:720px;">
+            <h3>🔍 Xem trước Payload (không gửi lên LGE)</h3>
+
+            <div id="previewInfo" style="padding:12px; background:#f8fafc; border-radius:8px; margin-bottom:12px; border:1px solid #e2e8f0;">
+                Đang chuẩn bị...
+            </div>
+
+            <div style="font-size:11px; font-weight:700; color:#555; margin-bottom:6px;">
+                JSON payload (PhotoData đã cắt):
+            </div>
+            <pre id="previewJson"
+                 style="background:#1e1e1e; color:#4af626; padding:12px; border-radius:8px; font-family:'Courier New',monospace; font-size:11px; max-height:300px; overflow:auto; white-space:pre-wrap; word-break:break-all; margin:0;"></pre>
+
+            <div class="modal-actions" style="margin-top:16px;">
+                <button class="btn-cancel" onclick="closePreviewModal()"
+                        style="background:#f3f4f6; color:#374151; padding:12px 20px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer;">
+                    Đóng
+                </button>
+                <button onclick="sendFromPreview()"
+                        style="background:#a50034; color:#fff; padding:12px 20px; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; flex:1;">
+                    🚀 Gửi luôn
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="app.js"></script>
 </body>

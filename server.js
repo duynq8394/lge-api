@@ -1,5 +1,6 @@
 // ============================================================
-// server.js — LGE WebApp Proxy v4 (admin-driven + manual test)
+// server.js — LGE WebApp Proxy v5
+// Fix upload: single-encode (KHÔNG double như plan/checkdevice)
 // ============================================================
 const express = require('express');
 const cors = require('cors');
@@ -9,12 +10,10 @@ const admin = require('firebase-admin');
 const crypto = require('crypto');
 const { sign, prepareBody } = require('./signing');
 
-// ---------- Firebase ----------
 const serviceAccount = require(process.env.FIREBASE_KEY_PATH || './firebase-key.json');
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// ---------- Express ----------
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -25,7 +24,7 @@ app.use(cors({ origin: true, credentials: false }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================
-// DEFAULT CONFIG
+// CONFIG
 // ============================================================
 const DEFAULT_CONFIG = {
     appVersion: '1.4.3',
@@ -85,7 +84,6 @@ async function loadRuntimeConfig() {
     try {
         const doc = await db.collection('admin_config').doc('settings').get();
         const c = doc.exists ? doc.data() : {};
-
         runtimeConfig = {
             appVersion: c.appVersion || DEFAULT_CONFIG.appVersion,
             buildNumber: /^\d+$/.test(String(c.buildNumber || ''))
@@ -106,9 +104,6 @@ async function loadRuntimeConfig() {
 loadRuntimeConfig();
 setInterval(loadRuntimeConfig, 30_000).unref();
 
-// ============================================================
-// BASE HEADERS
-// ============================================================
 const getBaseHeaders = (token) => ({
     "Accept-Encoding": "gzip, deflate, br",
     "Accept": "application/json",
@@ -121,7 +116,7 @@ const getBaseHeaders = (token) => ({
 });
 
 // ============================================================
-// HELPERS
+// UTILS
 // ============================================================
 const normalizeIMEI = (raw) => {
     if (typeof raw !== 'string') return null;
@@ -178,17 +173,13 @@ function touchSession(token) {
 }
 
 // ============================================================
-// SIGNING KEYS — auto-regen khi bundleId thay đổi
+// SIGNING KEYS
 // ============================================================
 async function ensureSigningKeys(deviceRef, deviceData, token) {
     const hasKeys = deviceData?.privateKeyPem && deviceData?.installId
         && deviceData?.fingerprint && deviceData?.keyId;
     const bundleMatches = deviceData?.signedWithBundleId === runtimeConfig.bundleId;
-
     if (hasKeys && bundleMatches) return deviceData;
-    if (hasKeys && !bundleMatches) {
-        console.log(`[keys] Bundle changed for ${deviceRef.id} → regenerate`);
-    }
 
     const { privateKey, publicKey: pubDer } = crypto.generateKeyPairSync('ec', {
         namedCurve: 'P-256',
@@ -214,7 +205,7 @@ async function ensureSigningKeys(deviceRef, deviceData, token) {
             platform: 'ios',
             deviceFingerprint: fingerprint,
             publicKey: publicKeyBase64
-        }, { headers: getBaseHeaders(token) });
+        }, { headers: getBaseHeaders(token), timeout: 10000 });
         console.log(`[registerpublickey] ${regResp.status} ${regResp.data?.messager || ''}`);
     } catch (e) {
         console.error('[registerpublickey] FAILED:', e.response?.data || e.message);
@@ -230,7 +221,6 @@ async function ensureSigningKeys(deviceRef, deviceData, token) {
     };
     if (deviceData) await deviceRef.update(updates);
     else await deviceRef.set(updates, { merge: true });
-
     return { ...(deviceData || {}), ...updates };
 }
 
@@ -272,11 +262,7 @@ async function getDevice(user) {
 // ============================================================
 app.get('/api/version', (req, res) => res.json({
     success: true,
-    data: {
-        ...runtimeConfig,
-        version: runtimeConfig.appVersion,
-        versionId: runtimeConfig.buildNumber
-    }
+    data: { ...runtimeConfig, version: runtimeConfig.appVersion, versionId: runtimeConfig.buildNumber }
 }));
 
 app.get('/api/lge-appver', async (req, res) => {
@@ -290,7 +276,7 @@ app.get('/api/lge-appver', async (req, res) => {
 });
 
 // ============================================================
-// LOGIN — lưu healthProbeToken cho admin test
+// LOGIN
 // ============================================================
 app.post('/proxy-login', loginRateLimiter, async (req, res) => {
     const { payload } = req.body;
@@ -316,8 +302,7 @@ app.post('/proxy-login', loginRateLimiter, async (req, res) => {
         if (!imei) {
             const clientIMEI = normalizeIMEI(payload.IMEI);
             if (!clientIMEI) return res.status(400).json({
-                success: false, needIMEI: true,
-                error: 'Vui lòng nhập IMEI (UUID)'
+                success: false, needIMEI: true, error: 'Vui lòng nhập IMEI (UUID)'
             });
             imei = clientIMEI;
             deviceToken = deviceToken ||
@@ -342,25 +327,18 @@ app.post('/proxy-login', loginRateLimiter, async (req, res) => {
         };
 
         const resp = await axios.post(runtimeConfig.lgeBaseUrl + '/users/login', lgePayload, {
-            headers: getBaseHeaders(null),
-            timeout: 30000
+            headers: getBaseHeaders(null), timeout: 30000
         });
 
         if (!resp.data?.token) return res.status(resp.status).json({ success: false, error: resp.data });
-
         await createSession(requestUser, resp.data.token);
 
-        // Lưu token cho admin test button.
-        // ⚠️ Bảo mật: token này có quyền gọi API. Firestore phải được bảo vệ.
-        // Nếu app mở rộng quy mô → mã hóa bằng key từ env hoặc chuyển sang TTL 7 ngày.
         try {
             await deviceRef.set({
                 healthProbeToken: resp.data.token,
                 healthProbeAt: new Date().toISOString()
             }, { merge: true });
-        } catch (e) {
-            console.warn(`[login] Không lưu được healthProbeToken cho ${requestUser}:`, e.message);
-        }
+        } catch (e) { console.warn(`[login] healthProbeToken: ${e.message}`); }
 
         try {
             await ensureSigningKeys(deviceRef, deviceData, resp.data.token);
@@ -396,7 +374,6 @@ app.post('/proxy-checkdevice', checkTesterAccess, async (req, res) => {
         const profile = runtimeConfig.deviceProfile || DEFAULT_DEVICE_PROFILE;
         const now = new Date();
         const yesterday = new Date(now.getTime() - 86400_000);
-
         const info = {
             ...profile,
             deviceId: device.imei,
@@ -406,7 +383,7 @@ app.post('/proxy-checkdevice', checkTesterAccess, async (req, res) => {
             getFirstInstallTime: profile.getFirstInstallTime || yesterday.toISOString(),
             getLastUpdateTime: profile.getLastUpdateTime || yesterday.toISOString()
         };
-        const bodyStr = prepareBody(info);
+        const bodyStr = prepareBody(info);   // double-encode
         const headers = { ...getBaseHeaders(req.body.token), ...sign(device, 'POST', apiPath, bodyStr, runtimeConfig) };
         const r = await axios.post(runtimeConfig.lgeBaseUrl + apiPath, bodyStr, { headers, timeout: 15000 });
         res.json({ success: true, data: r.data });
@@ -420,7 +397,7 @@ app.post('/proxy-plan', checkTesterAccess, async (req, res) => {
         const device = await getDevice(req.deviceUser);
         const apiPath = '/dashboard/lgplanbyplan';
         const d = req.body.planDate || new Date().toISOString().slice(0, 10);
-        const bodyStr = prepareBody({ pageNum: 0, planDate: d });
+        const bodyStr = prepareBody({ pageNum: 0, planDate: d });   // double-encode
         const headers = { ...getBaseHeaders(req.body.token), ...sign(device, 'POST', apiPath, bodyStr, runtimeConfig) };
         const r = await axios.post(runtimeConfig.lgeBaseUrl + apiPath, bodyStr, { headers, timeout: 30000 });
         res.json({ success: true, data: r.data });
@@ -429,18 +406,30 @@ app.post('/proxy-plan', checkTesterAccess, async (req, res) => {
     }
 });
 
+// ⚠️ UPLOAD — SINGLE-ENCODE (khác plan/checkdevice)
 app.post('/proxy-upload', checkTesterAccess, async (req, res) => {
     try {
         const device = await getDevice(req.deviceUser);
         const apiPath = '/attendants/upload';
-        const bodyStr = prepareBody(req.body.payload);
-        const headers = { ...getBaseHeaders(req.body.token), ...sign(device, 'POST', apiPath, bodyStr, runtimeConfig) };
+        const bodyStr = JSON.stringify(req.body.payload);   // single-encode
+
+        const headers = {
+            ...getBaseHeaders(req.body.token),
+            ...sign(device, 'POST', apiPath, bodyStr, runtimeConfig)
+        };
+
         const r = await axios.post(runtimeConfig.lgeBaseUrl + apiPath, bodyStr, {
-            headers, timeout: 60000, maxContentLength: 30 * 1024 * 1024
+            headers,
+            timeout: 90000,
+            maxBodyLength: 50 * 1024 * 1024,
+            maxContentLength: 5 * 1024 * 1024
         });
         res.json({ success: true, data: r.data });
     } catch (e) {
-        res.status(e.response?.status || 500).json({ success: false, error: e.response?.data || e.message });
+        console.error('[/proxy-upload]', e.response?.data || e.message);
+        res.status(e.response?.status || 500).json({
+            success: false, error: e.response?.data || e.message
+        });
     }
 });
 
@@ -497,68 +486,34 @@ app.post('/admin/verify', async (req, res) => {
 });
 
 // ============================================================
-// ADMIN — TEST SIGNING (NEW)
+// ADMIN — TEST SIGNING
 // ============================================================
 app.post('/admin/test-signing', verifyAdmin, async (req, res) => {
     const t0 = Date.now();
     try {
-        // 1) Xác định user để test
         let targetUser = (req.body?.username || '').trim().toLowerCase();
-
         if (!targetUser) {
-            const snap = await db.collection('devices')
-                .where('privateKeyPem', '!=', null)
-                .limit(1).get();
-            if (snap.empty) {
-                return res.json({
-                    success: false,
-                    error: 'Không có user nào có signing key. Hãy login 1 user trước.'
-                });
-            }
+            const snap = await db.collection('devices').where('privateKeyPem', '!=', null).limit(1).get();
+            if (snap.empty) return res.json({ success: false, error: 'Không có user có key' });
             targetUser = snap.docs[0].id;
         }
 
-        // 2) Lấy device info
         const deviceDoc = await db.collection('devices').doc(targetUser).get();
-        if (!deviceDoc.exists) {
-            return res.json({ success: false, error: `User "${targetUser}" không tồn tại trong devices` });
-        }
+        if (!deviceDoc.exists) return res.json({ success: false, error: `User "${targetUser}" không tồn tại` });
         const device = deviceDoc.data();
-        if (!device.privateKeyPem) {
-            return res.json({ success: false, error: `User "${targetUser}" chưa có signing key — login lại user này` });
-        }
-        if (!device.healthProbeToken) {
-            return res.json({
-                success: false,
-                error: `User "${targetUser}" chưa có probe token. Login lại user này 1 lần.`,
-                hint: 'healthProbeToken được lưu tự động khi user đăng nhập'
-            });
-        }
+        if (!device.privateKeyPem) return res.json({ success: false, error: `User chưa có key` });
+        if (!device.healthProbeToken) return res.json({
+            success: false, error: `User chưa có probe token — login lại`
+        });
 
-        // 3) Chuẩn bị tests
         const planDate = new Date().toISOString().slice(0, 10);
         const planBody = prepareBody({ pageNum: 0, planDate });
-
         const tests = [
-            {
-                name: 'GET /download/listMenu',
-                method: 'GET',
-                path: '/download/listMenu',
-                body: null,
-                timeout: 15000
-            },
-            {
-                name: 'POST /dashboard/lgplanbyplan',
-                method: 'POST',
-                path: '/dashboard/lgplanbyplan',
-                body: planBody,
-                timeout: 15000
-            }
+            { name: 'GET /download/listMenu', method: 'GET', path: '/download/listMenu', body: null },
+            { name: 'POST /dashboard/lgplanbyplan', method: 'POST', path: '/dashboard/lgplanbyplan', body: planBody }
         ];
 
         const results = [];
-
-        // 4) Chạy từng test
         for (const t of tests) {
             const st = Date.now();
             try {
@@ -566,92 +521,36 @@ app.post('/admin/test-signing', verifyAdmin, async (req, res) => {
                     ...getBaseHeaders(device.healthProbeToken),
                     ...sign(device, t.method, t.path, t.body, runtimeConfig)
                 };
-
                 let r;
-                if (t.method === 'GET') {
-                    r = await axios.get(runtimeConfig.lgeBaseUrl + t.path, { headers, timeout: t.timeout });
-                } else {
-                    r = await axios.post(runtimeConfig.lgeBaseUrl + t.path, t.body, { headers, timeout: t.timeout });
-                }
-
-                results.push({
-                    name: t.name,
-                    ok: true,
-                    status: r.status,
-                    duration: Date.now() - st,
-                    preview: (typeof r.data === 'object' ? JSON.stringify(r.data) : String(r.data)).slice(0, 120)
-                });
+                if (t.method === 'GET') r = await axios.get(runtimeConfig.lgeBaseUrl + t.path, { headers, timeout: 15000 });
+                else r = await axios.post(runtimeConfig.lgeBaseUrl + t.path, t.body, { headers, timeout: 15000 });
+                results.push({ name: t.name, ok: true, status: r.status, duration: Date.now() - st });
             } catch (e) {
-                const errData = e.response?.data;
                 results.push({
-                    name: t.name,
-                    ok: false,
-                    status: e.response?.status || 0,
-                    duration: Date.now() - st,
-                    error: typeof errData === 'object' ? JSON.stringify(errData).slice(0, 300) : String(errData || e.message).slice(0, 300)
+                    name: t.name, ok: false, status: e.response?.status || 0, duration: Date.now() - st,
+                    error: JSON.stringify(e.response?.data || e.message).slice(0, 300)
                 });
             }
         }
 
         const allOk = results.every(r => r.ok);
-        const bundleMatch = device.signedWithBundleId === runtimeConfig.bundleId;
-
-        // 5) Chẩn đoán
-        let diagnosis = '';
-        if (allOk) {
-            if (!bundleMatch) {
-                diagnosis = `Chữ ký hợp lệ NHƯNG device đang ký với bundleId "${device.signedWithBundleId || '(chưa track)'}" khác runtime "${runtimeConfig.bundleId}". Nên reset key user này để đồng bộ.`;
-            } else {
-                diagnosis = 'Chữ ký hợp lệ — mọi thứ OK.';
-            }
-        } else {
-            const failed = results.filter(r => !r.ok);
-            const status401 = failed.some(r => r.status === 401 || r.status === 403);
-            const status404 = failed.some(r => r.status === 404);
-            const noStatus = failed.some(r => r.status === 0);
-
-            if (noStatus) {
-                diagnosis = '🔌 Không kết nối được LGE. Kiểm tra LGE Base URL hoặc mạng.';
-            } else if (status404) {
-                diagnosis = '🌐 Endpoint không tồn tại — LGE có thể đã đổi path hoặc domain.';
-            } else if (status401) {
-                const errStr = failed.map(r => r.error || '').join(' ').toLowerCase();
-                if (errStr.includes('signature')) {
-                    diagnosis = '🚨 SIGNATURE INVALID — Format chữ ký có thể đã đổi, hoặc key không khớp. Kiểm tra body encoding (single vs double), field order, algorithm.';
-                } else if (errStr.includes('expired') || errStr.includes('token')) {
-                    diagnosis = '⏰ Token hết hạn — login lại user test để có healthProbeToken mới.';
-                } else {
-                    diagnosis = '🔑 Auth fail — kiểm tra bundleId/signingIdentity có khớp LGE không.';
-                }
-            } else {
-                diagnosis = `⚠️ Lỗi phía LGE (HTTP ${failed[0].status}) — xem chi tiết bên dưới.`;
-            }
-        }
-
         res.json({
             success: allOk,
             user: targetUser,
             bundleId: runtimeConfig.bundleId,
             signedWith: device.signedWithBundleId || null,
-            bundleMatch,
-            installId: device.installId,
-            algorithm: runtimeConfig.signatureAlgorithm,
+            bundleMatch: device.signedWithBundleId === runtimeConfig.bundleId,
             tests: results,
-            diagnosis,
+            diagnosis: allOk ? 'Chữ ký hợp lệ' : 'Xem chi tiết bên dưới',
             totalDuration: Date.now() - t0
         });
     } catch (e) {
-        console.error('[/admin/test-signing]', e);
-        res.status(500).json({
-            success: false,
-            error: e.message,
-            totalDuration: Date.now() - t0
-        });
+        res.status(500).json({ success: false, error: e.message, totalDuration: Date.now() - t0 });
     }
 });
 
 // ============================================================
-// ADMIN — VERSION CONFIG
+// ADMIN — CONFIG
 // ============================================================
 app.get('/admin/config/version', verifyAdmin, async (req, res) => {
     try {
@@ -660,10 +559,8 @@ app.get('/admin/config/version', verifyAdmin, async (req, res) => {
         res.json({
             success: true,
             data: {
-                appVersion: c.appVersion || '',
-                buildNumber: c.buildNumber || '',
-                appId: c.appId || '',
-                userAgent: c.userAgent || '',
+                appVersion: c.appVersion || '', buildNumber: c.buildNumber || '',
+                appId: c.appId || '', userAgent: c.userAgent || '',
                 runtime: { ...runtimeConfig, userAgent: buildUserAgent() },
                 defaults: DEFAULT_CONFIG
             }
@@ -718,9 +615,6 @@ app.get('/admin/config/version/lge', verifyAdmin, async (req, res) => {
     } catch (e) { res.json({ success: false, error: e.message, hint: e.response?.data }); }
 });
 
-// ============================================================
-// ADMIN — SIGNING CONFIG
-// ============================================================
 app.get('/admin/config/signing', verifyAdmin, async (req, res) => {
     try {
         const d = await db.collection('admin_config').doc('settings').get();
@@ -756,49 +650,33 @@ app.put('/admin/config/signing', verifyAdmin, async (req, res) => {
     try {
         const { bundleId, appSigningIdentity, signatureAlgorithm, lgeBaseUrl } = req.body;
         const update = {};
-
         if (bundleId !== undefined) {
             const v = String(bundleId).trim();
             if (v && !/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/.test(v))
-                return res.status(400).json({ success: false, error: 'Bundle ID không hợp lệ (vd: com.spiral.lgev2)' });
+                return res.status(400).json({ success: false, error: 'Bundle ID không hợp lệ' });
             update.bundleId = v || admin.firestore.FieldValue.delete();
         }
         if (appSigningIdentity !== undefined) {
             const v = String(appSigningIdentity).trim();
             if (v && !/^[A-Z0-9]{10}\.[a-z][a-z0-9.]*$/.test(v))
-                return res.status(400).json({ success: false, error: 'App Signing Identity phải dạng XXXXXXXXXX.bundle.id' });
+                return res.status(400).json({ success: false, error: 'Signing Identity không hợp lệ' });
             update.appSigningIdentity = v || admin.firestore.FieldValue.delete();
         }
         if (signatureAlgorithm !== undefined) {
             const v = String(signatureAlgorithm).trim().toLowerCase();
-            const allowed = ['ecdsa-p256-sha256'];
-            if (v && !allowed.includes(v))
-                return res.status(400).json({ success: false, error: `Algorithm phải là: ${allowed.join(', ')}` });
+            if (v && v !== 'ecdsa-p256-sha256')
+                return res.status(400).json({ success: false, error: 'Algorithm phải là ecdsa-p256-sha256' });
             update.signatureAlgorithm = v || admin.firestore.FieldValue.delete();
         }
         if (lgeBaseUrl !== undefined) {
             const v = String(lgeBaseUrl).trim();
             if (v && !/^https?:\/\/.+/.test(v))
-                return res.status(400).json({ success: false, error: 'LGE Base URL phải dạng https://...' });
+                return res.status(400).json({ success: false, error: 'URL phải dạng https://...' });
             update.lgeBaseUrl = v || admin.firestore.FieldValue.delete();
         }
-
         await db.collection('admin_config').doc('settings').set(update, { merge: true });
         await loadRuntimeConfig();
-
-        const changedIdentity = update.bundleId !== undefined || update.appSigningIdentity !== undefined;
-        res.json({
-            success: true,
-            runtime: {
-                bundleId: runtimeConfig.bundleId,
-                appSigningIdentity: runtimeConfig.appSigningIdentity,
-                signatureAlgorithm: runtimeConfig.signatureAlgorithm,
-                lgeBaseUrl: runtimeConfig.lgeBaseUrl
-            },
-            warning: changedIdentity
-                ? 'Bundle ID / Signing Identity đã đổi → bấm "Reset toàn bộ Signing Keys" và yêu cầu user đăng nhập lại.'
-                : null
-        });
+        res.json({ success: true, runtime: { ...runtimeConfig } });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -810,10 +688,10 @@ app.put('/admin/config/device-profile', verifyAdmin, async (req, res) => {
                 deviceProfile: admin.firestore.FieldValue.delete()
             }, { merge: true });
             await loadRuntimeConfig();
-            return res.json({ success: true, message: 'Reset về iPhone 8 Plus mặc định' });
+            return res.json({ success: true, message: 'Reset về default' });
         }
         if (typeof deviceProfile !== 'object')
-            return res.status(400).json({ success: false, error: 'deviceProfile phải là JSON object' });
+            return res.status(400).json({ success: false, error: 'Phải là JSON object' });
         await db.collection('admin_config').doc('settings').set({ deviceProfile }, { merge: true });
         await loadRuntimeConfig();
         res.json({ success: true, runtime: runtimeConfig.deviceProfile });
@@ -836,7 +714,7 @@ app.post('/admin/signing/reset-all-keys', verifyAdmin, async (req, res) => {
             });
             count++;
         }
-        res.json({ success: true, message: `Đã xoá signing keys của ${count} devices. User cần login lại.` });
+        res.json({ success: true, message: `Đã xoá keys của ${count} devices` });
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -872,7 +750,6 @@ app.get('/admin/testers', verifyAdmin, async (req, res) => {
                 expiresAt: u.expiresAt,
                 imei: d.imei || '',
                 deviceToken: d.deviceToken || '',
-                deviceCreatedAt: d.createdAt || null,
                 hasSigningKey: !!d.privateKeyPem,
                 installId: d.installId || null,
                 signedWithBundleId: d.signedWithBundleId || null,
@@ -945,6 +822,4 @@ app.delete('/admin/devices/:user', verifyAdmin, async (req, res) => {
 // ============================================================
 app.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
-app.listen(PORT, () => {
-    console.log(`[server] :${PORT}`);
-});
+app.listen(PORT, () => console.log(`[server] :${PORT}`));

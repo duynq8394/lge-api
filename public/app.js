@@ -1,5 +1,5 @@
 // ============================================================
-// app.js — LGE WebApp Client v5 (Tích hợp Watermark)
+// app.js — LGE WebApp Client v5 (iOS Text Overlay Watermark)
 // ============================================================
 const API_BASE = "https://lgpg-sapi.sucbat.com.vn";
 let token = "";
@@ -17,26 +17,27 @@ let currentSourceImage = null;
 let currentSourceFileSize = 0;
 let currentResizedBase64 = null;
 let currentResizeInfo = null;
+let currentWatermarkText = "";
 
-// ==================== CẤU HÌNH WATERMARK ====================
+// ==================== CẤU HÌNH WATERMARK (iOS SPEC) ====================
 const WATERMARK_CONFIG = {
     enabled: true,
-    color: '#EE3218',           // Màu chữ: #EE3218
+    // Font family: System (iOS San Francisco)
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "San Francisco", "Helvetica Neue", Helvetica, Arial, sans-serif',
     fontWeight: '600',          // Font weight: 600
-    fontSize: 10,               // Font size: 10px
-    lineHeightRatio: 1.4,       // Khoảng cách dòng
-    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
-    widthPercent: 1.0,          // Chiều rộng: 100%
-    align: 'left',              // Canh chữ: bên trái - góc dưới
-    paddingLeft: 12,            // Padding trái: 12px
-    paddingRight: 12,           // Padding phải: 12px
-    paddingTop: 8,              // Padding trên: 8px
-    paddingBottom: 8,           // Padding dưới: 8px
-    boxHeight: 300,             // Chiều cao hình watermark: 300px
-    boxWidthPercent: 1.0,       // Chiều rộng hình watermark: 100%
-    watermarkOpacity: 0.5,      // Opacity hình watermark: 0.5
-    watermarkBgImgUrl: null,    // Nếu có ảnh phủ nền watermark riêng, điền URL/Base64 vào đây
-    scaleWithCanvas: true       // true: Quy đổi tỷ lệ từ khung preview 300px lên ảnh thật (1080x1920) để không bị nhỏ li ti
+    fontSizePt: 10,             // Font size: 10 logical points
+    color: '#EE3218',           // Màu chữ: #EE3218
+    textAlign: 'left',          // Căn lề: Left (bên trái - góc dưới)
+    widthPercent: 1.0,          // Chiều rộng vùng chữ: 100%
+    paddingLeftPt: 12,          // Padding trái: 12 logical points
+    paddingRightPt: 12,         // Padding phải: 12 logical points
+    paddingTopPt: 8,            // Padding trên: 8 logical points
+    paddingBottomPt: 8,         // Padding dưới: 8 logical points
+    lineHeightRatio: 1.35,      // Khoảng cách dòng
+    iosLogicalWidthPt: 375,     // Chiều rộng chuẩn iOS logical points (375pt)
+    boxHeightPt: 300,           // Chiều cao vùng watermark: 300pt
+    watermarkOpacity: 0.5,      // Opacity hình nền watermark (nếu có)
+    watermarkBgImgUrl: null     // Kiểu hiển thị: Text overlay
 };
 
 let watermarkOverlayImg = null;
@@ -107,49 +108,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ==================== WATERMARK & RESIZE HELPER ====================
-// Tạo nội dung các dòng chữ Watermark
+// Tạo đúng chuỗi định dạng: [EASV6483]- [09:27:01 19-tháng 11]
 function getWatermarkLines(customTimeObj = null) {
     const now = customTimeObj || new Date();
     const pad = n => n.toString().padStart(2, '0');
-    const timeFormatted = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-    const empName = localStorage.getItem('lge_emp_name') || reqUser || '';
+    // Định dạng: HH:mm:ss DD-tháng M (VD: 09:27:01 19-tháng 11)
+    const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${pad(now.getDate())}-tháng ${now.getMonth() + 1}`;
+
+    let shopCode = 'SHOP';
     const shopSelect = document.getElementById('shopSelect');
-    let shopText = '';
-    if (shopSelect && shopSelect.value && shopSelect.selectedIndex > 0) {
-        shopText = shopSelect.options[shopSelect.selectedIndex].text;
+    if (shopSelect && shopSelect.value) {
+        try {
+            const shopData = JSON.parse(shopSelect.value);
+            if (shopData && shopData.code) {
+                shopCode = shopData.code;
+            }
+        } catch { /* ignore */ }
     }
 
-    const latVal = document.getElementById('lat')?.value;
-    const lngVal = document.getElementById('lng')?.value;
-    let gpsText = '';
-    if (latVal && lngVal) {
-        const latNum = parseFloat(latVal);
-        const lngNum = parseFloat(lngVal);
-        if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-            gpsText = `GPS: ${latNum.toFixed(6)}, ${lngNum.toFixed(6)}`;
-        }
-    }
-
-    const lines = [];
-    if (timeFormatted) lines.push(timeFormatted);
-    if (empName) lines.push(`NV: ${empName}`);
-    if (shopText) lines.push(shopText);
-    if (gpsText) lines.push(gpsText);
-
-    return lines;
+    const text = `[${shopCode}]- [${timeStr}]`;
+    currentWatermarkText = text;
+    return [text];
 }
 
-// Tự động ngắt dòng (word-wrap) khi chiều rộng chữ vượt quá 100% - padding
+// Tự động xuống dòng khi câu dài vượt quá 100% chiều rộng vùng chữ
 function wrapCanvasText(ctx, text, maxWidth) {
-    const words = text.split(' ');
+    const words = String(text).split(' ');
     const lines = [];
     let currentLine = words[0] || '';
 
     for (let i = 1; i < words.length; i++) {
         const word = words[i];
         const width = ctx.measureText(currentLine + " " + word).width;
-        if (width < maxWidth) {
+        if (width <= maxWidth) {
             currentLine += " " + word;
         } else {
             lines.push(currentLine);
@@ -160,38 +152,37 @@ function wrapCanvasText(ctx, text, maxWidth) {
     return lines;
 }
 
-// Vẽ Watermark lên Canvas theo đúng thông số CSS
+// Vẽ Text Overlay Watermark chuẩn thông số iOS Logical Points
 function drawWatermarkOnCanvas(ctx, outW, outH, customTimeObj = null) {
     if (!WATERMARK_CONFIG.enabled) return;
 
-    // Tính tỷ lệ scale từ khung 300px lên chiều cao thực tế của ảnh Canvas
-    const scale = WATERMARK_CONFIG.scaleWithCanvas ? (outH / WATERMARK_CONFIG.boxHeight) : 1;
+    // Quy đổi từ Logical Points (pt) sang Pixels (px) trên Canvas
+    const ptToPx = outW / WATERMARK_CONFIG.iosLogicalWidthPt;
 
-    const fontSize = Math.round(WATERMARK_CONFIG.fontSize * scale);
+    const fontSize = Math.max(10, Math.round(WATERMARK_CONFIG.fontSizePt * ptToPx));
     const lineHeight = Math.round(fontSize * WATERMARK_CONFIG.lineHeightRatio);
-    const padLeft = Math.round(WATERMARK_CONFIG.paddingLeft * scale);
-    const padRight = Math.round(WATERMARK_CONFIG.paddingRight * scale);
-    const padTop = Math.round(WATERMARK_CONFIG.paddingTop * scale);
-    const padBottom = Math.round(WATERMARK_CONFIG.paddingBottom * scale);
-    const wmBoxHeight = Math.round(WATERMARK_CONFIG.boxHeight * scale);
-    const wmBoxWidth = Math.round(outW * WATERMARK_CONFIG.boxWidthPercent);
+    const padLeft = Math.round(WATERMARK_CONFIG.paddingLeftPt * ptToPx);
+    const padRight = Math.round(WATERMARK_CONFIG.paddingRightPt * ptToPx);
+    const padTop = Math.round(WATERMARK_CONFIG.paddingTopPt * ptToPx);
+    const padBottom = Math.round(WATERMARK_CONFIG.paddingBottomPt * ptToPx);
+    const wmBoxHeight = Math.round(WATERMARK_CONFIG.boxHeightPt * ptToPx);
 
     ctx.save();
 
-    // 1. Nếu có hình nền watermark (width: 100%, height: 300px, opacity: 0.5)
+    // Nếu có cấu hình ảnh watermark nền (opacity 0.5, cao 300pt, rộng 100%)
     if (watermarkOverlayImg && watermarkOverlayImg.complete && watermarkOverlayImg.naturalWidth > 0) {
         ctx.globalAlpha = WATERMARK_CONFIG.watermarkOpacity;
-        ctx.drawImage(watermarkOverlayImg, 0, outH - wmBoxHeight, wmBoxWidth, wmBoxHeight);
+        ctx.drawImage(watermarkOverlayImg, 0, outH - wmBoxHeight, outW, wmBoxHeight);
     }
 
-    // 2. Cấu hình Font chữ & Màu sắc (#EE3218, font-weight: 600, font-size: 10px)
+    // Thiết lập Text Overlay: San Francisco, 600, 10pt, #EE3218, Left
     ctx.globalAlpha = 1.0;
     ctx.font = `${WATERMARK_CONFIG.fontWeight} ${fontSize}px ${WATERMARK_CONFIG.fontFamily}`;
     ctx.fillStyle = WATERMARK_CONFIG.color;
-    ctx.textAlign = WATERMARK_CONFIG.align;
+    ctx.textAlign = WATERMARK_CONFIG.textAlign;
     ctx.textBaseline = 'bottom';
 
-    // Chiều rộng khả dụng = 100% - (paddingLeft + paddingRight)
+    // Chiều rộng vùng chữ 100% trừ đi padding 2 bên
     const maxTextWidth = (outW * WATERMARK_CONFIG.widthPercent) - padLeft - padRight;
 
     const rawLines = getWatermarkLines(customTimeObj);
@@ -201,12 +192,11 @@ function drawWatermarkOnCanvas(ctx, outW, outH, customTimeObj = null) {
         wrappedLines.push(...subLines);
     });
 
-    // 3. Vẽ chữ canh trái - góc dưới (cách đáy paddingBottom, cách trái paddingLeft)
+    // Tính vị trí Y để chữ nằm ở góc dưới bên trái (cách đáy paddingBottom, cách trái paddingLeft)
     const totalTextHeight = wrappedLines.length * lineHeight;
     let startY = outH - padBottom - totalTextHeight + lineHeight;
 
-    // Đảm bảo không vượt quá giới hạn paddingTop của vùng watermark
-    const minTopY = outH - wmBoxHeight + padTop + fontSize;
+    const minTopY = padTop + fontSize;
     if (startY < minTopY) startY = minTopY;
 
     wrappedLines.forEach((line, index) => {
@@ -218,7 +208,7 @@ function drawWatermarkOnCanvas(ctx, outW, outH, customTimeObj = null) {
 }
 
 // Khớp cấu hình FieldForce:
-//   Box 1080×1920 | contain | quality 80 | JPEG + Đóng dấu Watermark
+//   Box 1080×1920 | contain | quality 80 | JPEG + Đóng dấu Text Overlay Watermark
 function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80, customTimeObj = null) {
     const srcW = img.naturalWidth || img.width;
     const srcH = img.naturalHeight || img.height;
@@ -240,7 +230,7 @@ function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80
     ctx.fillRect(0, 0, outW, outH);
     ctx.drawImage(img, 0, 0, outW, outH);
 
-    // Đóng dấu Watermark lên ảnh
+    // Vẽ lớp Text Overlay Watermark
     drawWatermarkOnCanvas(ctx, outW, outH, customTimeObj);
 
     return {
@@ -253,7 +243,7 @@ function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80
     };
 }
 
-// Hàm làm mới lại ảnh đã đóng dấu Watermark (khi đổi Shop, đổi GPS hoặc trước khi gửi)
+// Làm mới lại ảnh preview & base64 khi đổi Shop hoặc cập nhật thời gian trước khi gửi
 function refreshWatermarkedImage(customTimeObj = null) {
     if (!currentSourceImage) return null;
 
@@ -276,7 +266,8 @@ function refreshWatermarkedImage(customTimeObj = null) {
     if (resizeInfo) {
         resizeInfo.innerHTML = `
             <div>📷 <b>Gốc:</b> ${resized.sourceWidth}×${resized.sourceHeight} — ${origKB} KB</div>
-            <div>✂️ <b>Resize + Watermark:</b> ${resized.width}×${resized.height} — ${newKB} KB (JPEG q=0.80)</div>
+            <div>✂️ <b>Resize:</b> ${resized.width}×${resized.height} — ${newKB} KB (JPEG q=0.80)</div>
+            <div>🏷️ <b>Watermark:</b> <span style="color:#EE3218;font-weight:700;">${currentWatermarkText}</span></div>
             <div>📦 <b>Base64:</b> ${b64KB} KB <span style="color:#888;">(tăng ~33% so với binary)</span></div>
         `;
     }
@@ -304,6 +295,7 @@ function bindImagePreview() {
             currentSourceFileSize = 0;
             currentResizedBase64 = null;
             currentResizeInfo = null;
+            currentWatermarkText = "";
             return;
         }
 
@@ -339,7 +331,7 @@ function buildUploadPayload(shopData, finalLat, finalLng) {
     const now = new Date();
     const rt = getRealTime(now);
 
-    // Cập nhật lại Watermark với đúng thời gian thực sẽ gửi lên Server
+    // Vẽ lại watermark với thời gian thực khớp 100% với PhotoTime trong Payload
     if (currentSourceImage) {
         refreshWatermarkedImage(now);
     }
@@ -423,7 +415,7 @@ function previewPayload() {
             <b>Ảnh resize:</b><span>${currentResizeInfo.width}×${currentResizeInfo.height} (${Math.round(currentResizedBase64.length*0.75/1024)} KB)</span>
             <b>PhotoData b64:</b><span>${Math.round(currentResizedBase64.length/1024)} KB (${currentResizedBase64.length} chars)</span>
             <b>Body JSON:</b><span>${bodyStr.length} chars ≈ ${bodyBytes} bytes</span>
-            <b>Watermark:</b><span style="color:#EE3218;font-weight:700;">Đã đóng dấu (#EE3218)</span>
+            <b>Watermark:</b><span style="color:#EE3218;font-weight:700;">${currentWatermarkText}</span>
             <b>Encoding:</b><span style="color:#059669;font-weight:700;">SINGLE (không double)</span>
         </div>
     `;
@@ -663,7 +655,7 @@ function bindShopSelectListener() {
         if (d) d.innerHTML = "Vừa đổi shop, vui lòng bấm <b style='color:#a50034;'>[Xoay vị trí]</b>";
         clearRetryState();
 
-        // Cập nhật lại watermark trên ảnh nếu đã chọn ảnh
+        // Cập nhật lại mã [ShopCode] trên watermark nếu đã chọn ảnh
         if (currentSourceImage) refreshWatermarkedImage();
     });
     shopListenerBound = true;
@@ -749,9 +741,6 @@ document.getElementById('btnRandomGps')?.addEventListener('click', () => {
     }
     clearRetryState();
     printLog(`Xoay OK. Lệch: ${dist.toFixed(1)}m | Acc: ${pendingAccuracy.toFixed(1)}m`);
-
-    // Cập nhật lại Watermark trên ảnh với tọa độ mới xoay
-    if (currentSourceImage) refreshWatermarkedImage();
 });
 
 function updateAccuracyDisplay(acc) {
@@ -954,5 +943,6 @@ function clearImage() {
     currentSourceFileSize = 0;
     currentResizedBase64 = null;
     currentResizeInfo = null;
+    currentWatermarkText = "";
 }
 window.clearImage = clearImage;

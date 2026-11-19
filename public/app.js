@@ -1,5 +1,5 @@
 // ============================================================
-// app.js — LGE WebApp Client v5
+// app.js — LGE WebApp Client v5 (Tích hợp Watermark)
 // ============================================================
 const API_BASE = "https://lgpg-sapi.sucbat.com.vn";
 let token = "";
@@ -12,9 +12,39 @@ let lastFailedPayload = null;
 let shopListenerBound = false;
 let sessionKicked = false;
 
-// Cache ảnh đã resize — tránh resize lại khi Submit
+// Cache ảnh gốc & ảnh đã resize + đóng dấu watermark
+let currentSourceImage = null;
+let currentSourceFileSize = 0;
 let currentResizedBase64 = null;
 let currentResizeInfo = null;
+
+// ==================== CẤU HÌNH WATERMARK ====================
+const WATERMARK_CONFIG = {
+    enabled: true,
+    color: '#EE3218',           // Màu chữ: #EE3218
+    fontWeight: '600',          // Font weight: 600
+    fontSize: 10,               // Font size: 10px
+    lineHeightRatio: 1.4,       // Khoảng cách dòng
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+    widthPercent: 1.0,          // Chiều rộng: 100%
+    align: 'left',              // Canh chữ: bên trái - góc dưới
+    paddingLeft: 12,            // Padding trái: 12px
+    paddingRight: 12,           // Padding phải: 12px
+    paddingTop: 8,              // Padding trên: 8px
+    paddingBottom: 8,           // Padding dưới: 8px
+    boxHeight: 300,             // Chiều cao hình watermark: 300px
+    boxWidthPercent: 1.0,       // Chiều rộng hình watermark: 100%
+    watermarkOpacity: 0.5,      // Opacity hình watermark: 0.5
+    watermarkBgImgUrl: null,    // Nếu có ảnh phủ nền watermark riêng, điền URL/Base64 vào đây
+    scaleWithCanvas: true       // true: Quy đổi tỷ lệ từ khung preview 300px lên ảnh thật (1080x1920) để không bị nhỏ li ti
+};
+
+let watermarkOverlayImg = null;
+if (WATERMARK_CONFIG.watermarkBgImgUrl) {
+    watermarkOverlayImg = new Image();
+    watermarkOverlayImg.crossOrigin = "anonymous";
+    watermarkOverlayImg.src = WATERMARK_CONFIG.watermarkBgImgUrl;
+}
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -76,10 +106,120 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-// ==================== RESIZE HELPER ====================
+// ==================== WATERMARK & RESIZE HELPER ====================
+// Tạo nội dung các dòng chữ Watermark
+function getWatermarkLines(customTimeObj = null) {
+    const now = customTimeObj || new Date();
+    const pad = n => n.toString().padStart(2, '0');
+    const timeFormatted = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    const empName = localStorage.getItem('lge_emp_name') || reqUser || '';
+    const shopSelect = document.getElementById('shopSelect');
+    let shopText = '';
+    if (shopSelect && shopSelect.value && shopSelect.selectedIndex > 0) {
+        shopText = shopSelect.options[shopSelect.selectedIndex].text;
+    }
+
+    const latVal = document.getElementById('lat')?.value;
+    const lngVal = document.getElementById('lng')?.value;
+    let gpsText = '';
+    if (latVal && lngVal) {
+        const latNum = parseFloat(latVal);
+        const lngNum = parseFloat(lngVal);
+        if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+            gpsText = `GPS: ${latNum.toFixed(6)}, ${lngNum.toFixed(6)}`;
+        }
+    }
+
+    const lines = [];
+    if (timeFormatted) lines.push(timeFormatted);
+    if (empName) lines.push(`NV: ${empName}`);
+    if (shopText) lines.push(shopText);
+    if (gpsText) lines.push(gpsText);
+
+    return lines;
+}
+
+// Tự động ngắt dòng (word-wrap) khi chiều rộng chữ vượt quá 100% - padding
+function wrapCanvasText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = words[0] || '';
+
+    for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const width = ctx.measureText(currentLine + " " + word).width;
+        if (width < maxWidth) {
+            currentLine += " " + word;
+        } else {
+            lines.push(currentLine);
+            currentLine = word;
+        }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+}
+
+// Vẽ Watermark lên Canvas theo đúng thông số CSS
+function drawWatermarkOnCanvas(ctx, outW, outH, customTimeObj = null) {
+    if (!WATERMARK_CONFIG.enabled) return;
+
+    // Tính tỷ lệ scale từ khung 300px lên chiều cao thực tế của ảnh Canvas
+    const scale = WATERMARK_CONFIG.scaleWithCanvas ? (outH / WATERMARK_CONFIG.boxHeight) : 1;
+
+    const fontSize = Math.round(WATERMARK_CONFIG.fontSize * scale);
+    const lineHeight = Math.round(fontSize * WATERMARK_CONFIG.lineHeightRatio);
+    const padLeft = Math.round(WATERMARK_CONFIG.paddingLeft * scale);
+    const padRight = Math.round(WATERMARK_CONFIG.paddingRight * scale);
+    const padTop = Math.round(WATERMARK_CONFIG.paddingTop * scale);
+    const padBottom = Math.round(WATERMARK_CONFIG.paddingBottom * scale);
+    const wmBoxHeight = Math.round(WATERMARK_CONFIG.boxHeight * scale);
+    const wmBoxWidth = Math.round(outW * WATERMARK_CONFIG.boxWidthPercent);
+
+    ctx.save();
+
+    // 1. Nếu có hình nền watermark (width: 100%, height: 300px, opacity: 0.5)
+    if (watermarkOverlayImg && watermarkOverlayImg.complete && watermarkOverlayImg.naturalWidth > 0) {
+        ctx.globalAlpha = WATERMARK_CONFIG.watermarkOpacity;
+        ctx.drawImage(watermarkOverlayImg, 0, outH - wmBoxHeight, wmBoxWidth, wmBoxHeight);
+    }
+
+    // 2. Cấu hình Font chữ & Màu sắc (#EE3218, font-weight: 600, font-size: 10px)
+    ctx.globalAlpha = 1.0;
+    ctx.font = `${WATERMARK_CONFIG.fontWeight} ${fontSize}px ${WATERMARK_CONFIG.fontFamily}`;
+    ctx.fillStyle = WATERMARK_CONFIG.color;
+    ctx.textAlign = WATERMARK_CONFIG.align;
+    ctx.textBaseline = 'bottom';
+
+    // Chiều rộng khả dụng = 100% - (paddingLeft + paddingRight)
+    const maxTextWidth = (outW * WATERMARK_CONFIG.widthPercent) - padLeft - padRight;
+
+    const rawLines = getWatermarkLines(customTimeObj);
+    const wrappedLines = [];
+    rawLines.forEach(line => {
+        const subLines = wrapCanvasText(ctx, line, maxTextWidth);
+        wrappedLines.push(...subLines);
+    });
+
+    // 3. Vẽ chữ canh trái - góc dưới (cách đáy paddingBottom, cách trái paddingLeft)
+    const totalTextHeight = wrappedLines.length * lineHeight;
+    let startY = outH - padBottom - totalTextHeight + lineHeight;
+
+    // Đảm bảo không vượt quá giới hạn paddingTop của vùng watermark
+    const minTopY = outH - wmBoxHeight + padTop + fontSize;
+    if (startY < minTopY) startY = minTopY;
+
+    wrappedLines.forEach((line, index) => {
+        const y = startY + (index * lineHeight);
+        ctx.fillText(line, padLeft, y);
+    });
+
+    ctx.restore();
+}
+
 // Khớp cấu hình FieldForce:
-//   Box 1080×1920 | contain | quality 80 | JPEG
-function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80) {
+//   Box 1080×1920 | contain | quality 80 | JPEG + Đóng dấu Watermark
+function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80, customTimeObj = null) {
     const srcW = img.naturalWidth || img.width;
     const srcH = img.naturalHeight || img.height;
     if (!srcW || !srcH) throw new Error('Ảnh chưa load xong');
@@ -100,14 +240,49 @@ function resizeImageToBase64(img, targetW = 1080, targetH = 1920, quality = 0.80
     ctx.fillRect(0, 0, outW, outH);
     ctx.drawImage(img, 0, 0, outW, outH);
 
+    // Đóng dấu Watermark lên ảnh
+    drawWatermarkOnCanvas(ctx, outW, outH, customTimeObj);
+
     return {
         base64: canvas.toDataURL('image/jpeg', quality).split(',')[1],
         width: outW,
         height: outH,
         sourceWidth: srcW,
         sourceHeight: srcH,
-        sourceBytes: 0
+        sourceBytes: currentSourceFileSize || 0
     };
+}
+
+// Hàm làm mới lại ảnh đã đóng dấu Watermark (khi đổi Shop, đổi GPS hoặc trước khi gửi)
+function refreshWatermarkedImage(customTimeObj = null) {
+    if (!currentSourceImage) return null;
+
+    const previewBox = document.getElementById('imagePreview');
+    const previewImg = document.getElementById('previewImg');
+    const resizeInfoBox = document.getElementById('resizeInfoBox');
+    const resizeInfo = document.getElementById('resizeInfo');
+
+    const resized = resizeImageToBase64(currentSourceImage, 1080, 1920, 0.80, customTimeObj);
+    currentResizedBase64 = resized.base64;
+    currentResizeInfo = resized;
+
+    if (previewImg) previewImg.src = 'data:image/jpeg;base64,' + resized.base64;
+    if (previewBox) previewBox.style.display = 'block';
+
+    const origKB = (resized.sourceBytes / 1024).toFixed(0);
+    const newKB = Math.round(resized.base64.length * 0.75 / 1024);
+    const b64KB = Math.round(resized.base64.length / 1024);
+
+    if (resizeInfo) {
+        resizeInfo.innerHTML = `
+            <div>📷 <b>Gốc:</b> ${resized.sourceWidth}×${resized.sourceHeight} — ${origKB} KB</div>
+            <div>✂️ <b>Resize + Watermark:</b> ${resized.width}×${resized.height} — ${newKB} KB (JPEG q=0.80)</div>
+            <div>📦 <b>Base64:</b> ${b64KB} KB <span style="color:#888;">(tăng ~33% so với binary)</span></div>
+        `;
+    }
+    if (resizeInfoBox) resizeInfoBox.style.display = 'block';
+
+    return resized;
 }
 
 // ==================== IMAGE PICKER ====================
@@ -119,13 +294,14 @@ function bindImagePreview() {
         const previewBox = document.getElementById('imagePreview');
         const previewImg = document.getElementById('previewImg');
         const resizeInfoBox = document.getElementById('resizeInfoBox');
-        const resizeInfo = document.getElementById('resizeInfo');
 
         if (!this.files || this.files.length === 0) {
             display.innerHTML = "";
             if (previewBox) previewBox.style.display = 'none';
             if (previewImg) previewImg.src = "";
             if (resizeInfoBox) resizeInfoBox.style.display = 'none';
+            currentSourceImage = null;
+            currentSourceFileSize = 0;
             currentResizedBase64 = null;
             currentResizeInfo = null;
             return;
@@ -139,29 +315,12 @@ function bindImagePreview() {
             const img = new Image();
             img.onload = () => {
                 try {
-                    const resized = resizeImageToBase64(img, 1080, 1920, 0.80);
-                    resized.sourceBytes = file.size;
-                    currentResizedBase64 = resized.base64;
-                    currentResizeInfo = resized;
-
-                    // Preview ảnh đã resize
-                    previewImg.src = 'data:image/jpeg;base64,' + resized.base64;
-                    previewBox.style.display = 'block';
-
-                    // Info chi tiết
-                    const origKB = (file.size / 1024).toFixed(0);
-                    const newKB = Math.round(resized.base64.length * 0.75 / 1024);
-                    const b64KB = Math.round(resized.base64.length / 1024);
-                    if (resizeInfo) {
-                        resizeInfo.innerHTML = `
-                            <div>📷 <b>Gốc:</b> ${resized.sourceWidth}×${resized.sourceHeight} — ${origKB} KB</div>
-                            <div>✂️ <b>Resize:</b> ${resized.width}×${resized.height} — ${newKB} KB (JPEG q=0.80)</div>
-                            <div>📦 <b>Base64:</b> ${b64KB} KB <span style="color:#888;">(tăng ~33% so với binary)</span></div>
-                        `;
-                    }
-                    if (resizeInfoBox) resizeInfoBox.style.display = 'block';
+                    currentSourceImage = img;
+                    currentSourceFileSize = file.size;
+                    refreshWatermarkedImage();
                 } catch (err) {
-                    showToast('Lỗi resize ảnh: ' + err.message, 'error');
+                    showToast('Lỗi xử lý ảnh: ' + err.message, 'error');
+                    currentSourceImage = null;
                     currentResizedBase64 = null;
                     currentResizeInfo = null;
                 }
@@ -177,11 +336,18 @@ function bindImagePreview() {
 // ==================== BUILD PAYLOAD ====================
 // Dùng chung cho Submit và Preview
 function buildUploadPayload(shopData, finalLat, finalLng) {
+    const now = new Date();
+    const rt = getRealTime(now);
+
+    // Cập nhật lại Watermark với đúng thời gian thực sẽ gửi lên Server
+    if (currentSourceImage) {
+        refreshWatermarkedImage(now);
+    }
+
     if (!currentResizedBase64) throw new Error('Chưa có ảnh đã resize');
 
     const accuracy = pendingAccuracy ?? generateRealisticAccuracy();
     const fakeName = crypto.randomUUID().toUpperCase() + ".jpg";
-    const rt = getRealTime();
 
     // DataLocation — khớp 100% sample 17/11/2026
     const dataLocation = {
@@ -221,7 +387,7 @@ function previewPayload() {
     const latStr = document.getElementById('lat').value;
     const lngStr = document.getElementById('lng').value;
     if (!latStr || !lngStr) return alert("Bấm [Xoay vị trí] trước!");
-    if (!currentResizedBase64) return alert("Chọn ảnh trước!");
+    if (!currentResizedBase64 && !currentSourceImage) return alert("Chọn ảnh trước!");
 
     const finalLat = parseFloat(latStr);
     const finalLng = parseFloat(lngStr);
@@ -257,6 +423,7 @@ function previewPayload() {
             <b>Ảnh resize:</b><span>${currentResizeInfo.width}×${currentResizeInfo.height} (${Math.round(currentResizedBase64.length*0.75/1024)} KB)</span>
             <b>PhotoData b64:</b><span>${Math.round(currentResizedBase64.length/1024)} KB (${currentResizedBase64.length} chars)</span>
             <b>Body JSON:</b><span>${bodyStr.length} chars ≈ ${bodyBytes} bytes</span>
+            <b>Watermark:</b><span style="color:#EE3218;font-weight:700;">Đã đóng dấu (#EE3218)</span>
             <b>Encoding:</b><span style="color:#059669;font-weight:700;">SINGLE (không double)</span>
         </div>
     `;
@@ -410,8 +577,8 @@ function parseCoords(text) {
     return null;
 }
 
-function getRealTime() {
-    const now = new Date();
+function getRealTime(customDate = null) {
+    const now = customDate || new Date();
     const pad = n => n.toString().padStart(2, '0');
     return {
         date: parseInt(`${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}`),
@@ -495,6 +662,9 @@ function bindShopSelectListener() {
         const d = document.getElementById('distanceDisplay');
         if (d) d.innerHTML = "Vừa đổi shop, vui lòng bấm <b style='color:#a50034;'>[Xoay vị trí]</b>";
         clearRetryState();
+
+        // Cập nhật lại watermark trên ảnh nếu đã chọn ảnh
+        if (currentSourceImage) refreshWatermarkedImage();
     });
     shopListenerBound = true;
 }
@@ -573,12 +743,15 @@ document.getElementById('btnRandomGps')?.addEventListener('click', () => {
     const dist = getDistanceMeters(noisy.latitude, noisy.longitude, shopData.lat, shopData.lng);
     const distDisplay = document.getElementById('distanceDisplay');
     if (dist > 150) {
-        distDisplay.innerHTML = `⚠️ Cách shop: <span style="color:#dc3545;font-size:14px;">${dist.toFixed(1)}m</span><br><b style="color:#dc3545;">(> 150m — sẽ bị chặn)</b>`;
+        distDisplay.innerHTML = `⚠️ Cách shop: <span style="color:#dc3545;font-size:14px;">${dist.toFixed(1)}m</span> <b style="color:#dc3545;">(> 150m — sẽ bị chặn)</b>`;
     } else {
-        distDisplay.innerHTML = `✅ Cách shop: <span style="color:#059669;font-size:14px;">${dist.toFixed(1)}m</span><br><b style="color:#059669;">(Hợp lệ)</b>`;
+        distDisplay.innerHTML = `✅ Cách shop: <span style="color:#059669;font-size:14px;">${dist.toFixed(1)}m</span> <b style="color:#059669;">(Hợp lệ)</b>`;
     }
     clearRetryState();
     printLog(`Xoay OK. Lệch: ${dist.toFixed(1)}m | Acc: ${pendingAccuracy.toFixed(1)}m`);
+
+    // Cập nhật lại Watermark trên ảnh với tọa độ mới xoay
+    if (currentSourceImage) refreshWatermarkedImage();
 });
 
 function updateAccuracyDisplay(acc) {
@@ -688,7 +861,7 @@ if (btnSubmit) {
         const finalLat = parseFloat(latStr);
         const finalLng = parseFloat(lngStr);
         if (!Number.isFinite(finalLat) || !Number.isFinite(finalLng)) return alert("Tọa độ lỗi.");
-        if (!currentResizedBase64) return alert("Chọn ảnh trước!");
+        if (!currentResizedBase64 && !currentSourceImage) return alert("Chọn ảnh trước!");
         const shopData = JSON.parse(shopVal);
         if (!Number.isFinite(shopData.lat) || !Number.isFinite(shopData.lng)) return alert("Shop chưa có tọa độ.");
 
@@ -777,6 +950,8 @@ function clearImage() {
     const pb = document.getElementById('imagePreview'); if (pb) pb.style.display = 'none';
     const pi = document.getElementById('previewImg'); if (pi) pi.src = "";
     const rib = document.getElementById('resizeInfoBox'); if (rib) rib.style.display = 'none';
+    currentSourceImage = null;
+    currentSourceFileSize = 0;
     currentResizedBase64 = null;
     currentResizeInfo = null;
 }
